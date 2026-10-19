@@ -193,6 +193,7 @@ final class Installer: NSObject, NSApplicationDelegate, NSWindowDelegate {
         isBusy = busy
         [installButton, uninstallButton, checkButton, chooseButton, reportButton, copyButton].forEach { $0?.isEnabled = !busy }
         installButton.isEnabled = !busy && !installed
+        checkButton.isEnabled = !busy && !installed
         if busy { indicator.startAnimation(nil) } else { indicator.stopAnimation(nil) }
     }
 
