@@ -264,7 +264,9 @@ final class Installer: NSObject, NSApplicationDelegate, NSWindowDelegate {
     func failed(_ output: String) {
         var title = "Setup needs attention"
         var detail = "No successful installation was reported. Open Details for the exact message. If an installation was interrupted, use Uninstall / Restore."
-        if output.contains("Quit Civ V") { title = "Close Civ V first"; detail = "Quit both Civilization V and its launcher, then try again. Steam can stay open." }
+        if !FileManager.default.fileExists(atPath: python.path) { title = "Installer files are missing"; detail = "Extract the complete macOS ZIP and open the app again. Keep the app bundle intact." }
+        else if !FileManager.default.fileExists(atPath: game.appendingPathComponent("Contents/MacOS/Civilization V").path) { title = "Choose your Civilization V app"; detail = "Click Choose Game and select Civilization V.app in your Steam library. In Steam, Installed Files → Browse opens the game's folder." }
+        else if output.contains("Quit Civ V") { title = "Close Civ V first"; detail = "Quit both Civilization V and its launcher, then try again. Steam can stay open." }
         else if output.contains("EUI conflicts") || output.contains("existing VP_MODPACK") || output.contains("existing package uses") { title = "Another mod conflicts with this beta"; detail = "Move EUI or the other VP modpack completely outside the game's DLC folder. This installer does not delete other mods." }
         else if output.contains("reviewed SHA-256") { title = "This game build is not supported"; detail = "Beta 0.1 requires Steam's Mac Aspyr 1.4.2 (180925) build. Your game files were not replaced." }
         else if output.contains("localization cache") || output.contains("Localization-Merged.db") { title = "Run normal Brave New World once"; detail = "Restore any existing beta, launch unmodified BNW, reach the menu and quit. Then try installing again." }
