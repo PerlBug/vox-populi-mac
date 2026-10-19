@@ -1,5 +1,10 @@
 # Release notes
 
+## 0.1.0-beta.3 — clearer installation explanation
+
+- Explains directly in the installer that Mac Civ V already has a game core, but cannot load VP's Windows DLL from MODS. The installer replaces that core with the native Mac VP version and installs its matching startup data, with backups.
+- Clarifies the same requirement in the installation guide and README. Installation behavior, game core, data and save format are unchanged from beta.2.
+
 ## 0.1.0-beta.2 — graphical Mac installer
 
 - Adds a native universal Apple Silicon / Intel installer app: game picker, compatibility check, install, restore, diagnostics and copyable details.

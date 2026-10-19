@@ -133,7 +133,7 @@ final class Installer: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let actions = stack([installButton, checkButton, uninstallButton], vertical: false, spacing: 10)
 
         let notice = label("Before installing: quit Civ V and its launcher, use the official DLC, and remove EUI or other VP modpacks. Your normal saves are set aside and returned when you uninstall.", secondary: true)
-        let mods = label("Why not the MODS folder? VP needs a native game core and database tables at startup. A normal mod-folder copy cannot provide both. This app installs the matching core and data together.", secondary: true)
+        let mods = label("Why not the MODS folder? Mac Civ V has its own game core, but cannot load Vox Populi’s Windows DLL. This installer replaces the core with a native Mac VP version and installs its matching startup data, with backups. VP stays active until you uninstall.", secondary: true)
         notice.preferredMaxLayoutWidth = 760
         mods.preferredMaxLayoutWidth = 760
         reportButton = button("Diagnostics", #selector(report))

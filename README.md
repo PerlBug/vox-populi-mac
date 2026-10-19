@@ -19,7 +19,7 @@ The graphical beta is the **complete `-macOS.zip` release**, not GitHub's automa
 
 ## Install
 
-1. Extract `Vox-Populi-Mac-0.1.0-beta.2-macOS.zip` and keep **Vox Populi Mac Installer.app** in Documents or Applications.
+1. Extract `Vox-Populi-Mac-0.1.0-beta.3-macOS.zip` and keep **Vox Populi Mac Installer.app** in Documents or Applications.
 2. Double-click the app. It finds the default Steam installation. If Steam uses another library, click **Choose Game…** and select `Civilization V.app`.
 3. Click **Check Compatibility**. The app checks the game build, matching beta files, open game processes, working cache and detected conflicts without installing anything.
 4. Click **Install Beta** and wait for **Vox Populi is installed**. No administrator password is requested; the app needs normal write access to your game and user-data folders.
@@ -29,7 +29,7 @@ This community beta is **ad hoc signed, not Apple-notarized**. macOS may block a
 
 ## Why the MODS folder is not supported
 
-Copying this beta into `MODS` will not install it. Vox Populi needs a replacement **game core**, as well as SQL, Lua and assets. The usual Windows download contains a Windows DLL; the Mac game needs a native Mac core instead.
+Copying this beta into `MODS` will not install it. Mac Civ V already has its own **native game core**, but it cannot load Vox Populi's **Windows DLL** from the MODS folder. This port replaces the stock core with a native Mac version of the VP core, alongside its SQL, Lua and assets.
 
 In this port, the native VP core runs while the game is starting, before ordinary mod activation. Its matching database tables must already exist at that point. A normal MODS-folder copy cannot replace the Mac core or supply that early startup data. Missing VP tables caused startup failures during development.
 
