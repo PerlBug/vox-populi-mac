@@ -12,13 +12,15 @@ git submodule update --init --recursive
 
 The pinned upstream commit is recorded by Git. Do not edit or copy upstream gameplay code into the Mac layer.
 
-Each playable beta ZIP also includes two source snapshots. Extract **both** into the same working directory to reconstruct its source tree without Git:
+Each playable beta ZIP also includes two source snapshots for inspection and native-core compilation. Extract **both** into the same working directory:
 
 ```sh
 tar -xzf /path/to/beta/source/mac-layer.tar.gz
 tar -xzf /path/to/beta/source/community-patch.tar.gz
 cd Vox-Populi-Mac-source
 ```
+
+The data packager and release builder use Git revision metadata. For a complete package rebuild, use the Git checkout above; to work from these snapshots, replace the extracted upstream directory with a Git clone checked out at the `upstream_commit` in the beta's `release.json`.
 
 ## Build
 
