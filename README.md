@@ -10,34 +10,30 @@ The Mac compatibility code lives separately from the [upstream Vox Populi projec
 
 - Own the **Steam Mac edition** of Civ V, **Gods & Kings**, **Brave New World**, and all gameplay/civilization DLC. A Complete Edition installation is the simplest match.
 - This beta supports the reviewed **Aspyr 1.4.2 (180925), Intel x86_64** game build. The installer checks the executable and refuses a different build. Apple Silicon runs that game through Rosetta. Other storefronts and game builds are untested.
-- Have **Python 3.11 or newer**. Check with `python3 --version`. Installation also uses Apple's `nm`, `lipo` and `codesign` tools. If these are unavailable, install the Apple Command Line Tools with `xcode-select --install`.
+- The graphical installer requires **macOS 11 or newer** and includes its own Apple Silicon and Intel Python runtimes. You do **not** need Terminal, a separate Python installation, or Apple's developer tools to use the app.
 - Launch normal, unmodified BNW once and quit to create its working cache.
 - Quit **Civ V and its launcher**. Steam can stay open.
 - Remove conflicting DLC mods as described below. Keep a separate copy of important saves.
 
-The playable beta is the **complete release ZIP**, not GitHub's automatic “Source code” download. A source checkout needs a local build; see the [developer guide](docs/DEVELOPMENT.md).
+The graphical beta is the **complete `-macOS.zip` release**, not GitHub's automatic “Source code” download. A source checkout needs a local build; see the [developer guide](docs/DEVELOPMENT.md).
 
 ## Install
 
-1. Extract `Vox-Populi-Mac-0.1.0-beta.1.zip` into a folder you will keep, such as Documents.
-2. Open Terminal. Type `cd `, drag the extracted folder into the Terminal window, and press Return.
-3. Run:
+1. Extract `Vox-Populi-Mac-0.1.0-beta.2-macOS.zip` and keep **Vox Populi Mac Installer.app** in Documents or Applications.
+2. Double-click the app. It finds the default Steam installation. If Steam uses another library, click **Choose Game…** and select `Civilization V.app`.
+3. Click **Check Compatibility**. The app checks the game build, matching beta files, open game processes, working cache and detected conflicts without installing anything.
+4. Click **Install Beta** and wait for **Vox Populi is installed**. No administrator password is requested; the app needs normal write access to your game and user-data folders.
+5. Launch Civ V through Steam with BNW enabled. Choose **regular Single Player → Set Up Game** and start a **new game**. The package loads automatically; there is no Mods-menu activation step.
 
-   ```sh
-   python3 vp-mac.py install
-   ```
+This community beta is **ad hoc signed, not Apple-notarized**. macOS may block a downloaded copy. For an app you trust, Apple's per-app **System Settings → Privacy & Security → Open Anyway** flow may be available after the first launch attempt. See [Apple's instructions](https://support.apple.com/en-au/102445).
 
-   For a check without changing anything, run `python3 vp-mac.py install --dry-run` first.
+## Why the MODS folder is not supported
 
-4. Launch Civ V through Steam with BNW enabled. Choose **regular Single Player → Set Up Game** and start a **new game**. The package loads automatically; there is no Mods-menu activation step.
+Copying this beta into `MODS` will not install it. Vox Populi needs a replacement **game core**, as well as SQL, Lua and assets. The usual Windows download contains a Windows DLL; the Mac game needs a native Mac core instead.
 
-If Steam uses another library, point to the app explicitly:
+In this port, the native VP core runs while the game is starting, before ordinary mod activation. Its matching database tables must already exist at that point. A normal MODS-folder copy cannot replace the Mac core or supply that early startup data. Missing VP tables caused startup failures during development.
 
-```sh
-python3 vp-mac.py install --app "/path/to/Civilization V.app"
-```
-
-Use the same `--app` option for status and uninstall when using a custom location.
+The installer therefore manages the **native core and matching DLC-style data package together**, with a verified backup and restore path. Do not copy the Windows VP folders into MODS, activate another copy of CP/VP, or try to move only this beta's assets into MODS. This restriction concerns installing this port; it does not mean every other Mac mod uses the same installation method.
 
 **VP stays active for regular games until you uninstall it.** This is a replacement game core plus a DLC-style data package, not a mod you can toggle independently for each save. Do not activate another copy of CP or VP.
 
@@ -68,14 +64,9 @@ Uninstall this beta before Steam file verification, a game update, or installing
 
 ## Uninstall / return to normal Civ V
 
-Quit Civ V and its launcher. From the extracted beta folder, run:
+Quit Civ V and its launcher, reopen **Vox Populi Mac Installer.app**, and click **Uninstall / Restore**. Wait for **Your original game is restored**.
 
-```sh
-python3 vp-mac.py uninstall
-python3 vp-mac.py status
-```
-
-Status should show `"state": "stock"`. This restores the verified original core, original cache and original saves, and preserves the beta session separately. **Do not delete backups or use Steam verification as the normal uninstall method.** Keep the beta folder until removal is complete.
+This restores the verified original core, original cache and original saves, and preserves the beta session separately. **Do not delete backups or use Steam verification as the normal uninstall method.** Keep the installer app until removal is complete. The dates and paths of preserved beta sessions appear under **Show technical details**.
 
 ## What has been tested?
 
@@ -88,15 +79,15 @@ Long campaigns, later eras, all UI screens and all gameplay systems have **not**
 
 ## If something goes wrong
 
-Quit to desktop if possible, then collect the latest session report:
+Quit to desktop if possible, open the installer and click **Diagnostics**, then **Copy Details**.
 
-```sh
-python3 vp-mac.py report
-```
-
-Share the output, what you were doing, the turn number and whether it was a new game or a reload. A report showing startup checks passed does not establish that every gameplay feature worked. After a crash, uninstall before switching builds; uninstall also preserves the session's cache and saves for debugging.
+Share that output, what you were doing, the turn number and whether it was a new game or a reload. A report showing startup checks passed does not establish that every gameplay feature worked. After a crash, uninstall before switching builds; uninstall also preserves the session's cache and saves for debugging.
 
 Logs are under `~/Library/Application Support/Sid Meier's Civilization 5/Logs/`. If installation says the localization cache is missing or damaged, restore first, launch stock BNW once and quit, then retry. If it reports a changed core or backup, stop and retain those files; do not manually delete them to force installation.
+
+### Optional command-line tools
+
+The separate command-line beta ZIP and source builds still support `python3 vp-mac.py install`, `status`, `report` and `uninstall`, with `--app "/path/to/Civilization V.app"` for another Steam library. These direct commands require Python 3.11+. The GUI uses the same backend with its bundled runtime.
 
 ## Development and credits
 

@@ -150,34 +150,50 @@ class ContractTests(unittest.TestCase):
 
     def vtable_fixture(self):
         binary = self.workspace / "fixture.dylib"
-        data = bytearray(0x300)
-        struct.pack_into("<IIIIIIII", data, 0, 0xfeedfacf, 0x1000007, 3, 8, 1, 72, 0, 0)
+        data = bytearray(0x600)
+        struct.pack_into("<IIIIIIII", data, 0, 0xfeedfacf, 0x1000007, 3, 8, 2, 96, 0, 0)
         struct.pack_into("<II16sQQQQIIII", data, 32, 0x19, 72, b"__DATA", 0, len(data), 0, len(data), 3, 3, 0, 0)
         struct.pack_into("<QQ", data, 0x110, 0x200, 0x220)
-        binary.write_bytes(data)
         profile = {"core_vtables": [{"class": "Fixture", "symbol": "__ZTV7Fixture",
                                     "slot_symbols": ["__ZN7Fixture4flagEb", "__ZN7Fixture7versionERKNSt3__112basic_stringIcNS0_11char_traitsIcEENS0_9allocatorIcEEEE"]}]}
-        nm = "0000000000000100 s __ZTV7Fixture\n0000000000000200 t " + profile["core_vtables"][0]["slot_symbols"][0] + "\n0000000000000220 t " + profile["core_vtables"][0]["slot_symbols"][1] + "\n"
-        return binary, profile, nm
+        strings = bytearray(b"\0")
+        for index, (name, address) in enumerate(zip(["__ZTV7Fixture"] + profile["core_vtables"][0]["slot_symbols"], [0x100, 0x200, 0x220])):
+            struct.pack_into("<IBBHQ", data, 0x300 + index * 16, len(strings), 0x0e, 1, 0, address)
+            strings.extend(name.encode() + b"\0")
+        struct.pack_into("<6I", data, 104, 2, 24, 0x300, 3, 0x330, len(strings))
+        data[0x330:0x330 + len(strings)] = strings
+        binary.write_bytes(data)
+        return binary, profile
 
     def test_linked_vtable_checks_exact_symbols_and_rejects_swapped_slots(self):
-        binary, profile, nm = self.vtable_fixture()
-        with mock.patch.object(sdk.subprocess, "run", return_value=mock.Mock(stdout=nm)):
-            self.assertEqual(sdk.verify_core(binary, profile)["result"], "passed")
-            data = bytearray(binary.read_bytes())
-            struct.pack_into("<QQ", data, 0x110, 0x220, 0x200)
-            binary.write_bytes(data)
-            with self.assertRaisesRegex(sdk.ContractError, "slot 0"):
-                sdk.verify_core(binary, profile)
+        binary, profile = self.vtable_fixture()
+        self.assertEqual(sdk.verify_core(binary, profile)["result"], "passed")
+        data = bytearray(binary.read_bytes())
+        struct.pack_into("<QQ", data, 0x110, 0x220, 0x200)
+        binary.write_bytes(data)
+        with self.assertRaisesRegex(sdk.ContractError, "slot 0"):
+            sdk.verify_core(binary, profile)
 
     def test_linked_vtable_rejects_non_macho_and_out_of_file_address(self):
-        binary, profile, nm = self.vtable_fixture()
-        with mock.patch.object(sdk.subprocess, "run", return_value=mock.Mock(stdout=nm.replace("0000000000000100", "0000000000001000"))):
-            with self.assertRaisesRegex(sdk.ContractError, "outside Mach-O"):
-                sdk.verify_core(binary, profile)
+        binary, profile = self.vtable_fixture()
+        data = bytearray(binary.read_bytes())
+        struct.pack_into("<Q", data, 0x308, 0x1000)
+        binary.write_bytes(data)
+        with self.assertRaisesRegex(sdk.ContractError, "outside Mach-O"):
+            sdk.verify_core(binary, profile)
         binary.write_bytes(b"bad")
         with self.assertRaisesRegex(sdk.ContractError, "Mach-O"):
             sdk.verify_core(binary, profile)
+
+    def test_macho_rejects_corrupt_command_symbol_and_string_bounds(self):
+        binary, _ = self.vtable_fixture()
+        original = binary.read_bytes()
+        for offset, changed in [(16, 1000), (36, 4), (116, 1000), (120, len(original)), (0x300, 1000)]:
+            with self.subTest(offset=offset):
+                data = bytearray(original)
+                struct.pack_into("<I", data, offset, changed)
+                with self.assertRaises(ValueError):
+                    sdk.macho.read_image(data)
 
     def test_changed_stream_field_type_is_rejected(self):
         self.edit("stream", "unsigned int m_uiPosition;", "unsigned long m_uiPosition;")

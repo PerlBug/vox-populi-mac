@@ -60,11 +60,10 @@ def checked(args):
 
 def validate_library(path, wrapper, expected_marker=MARKER):
     regular(path)
-    architectures = checked(["/usr/bin/lipo", "-archs", str(path)]).split()
-    if architectures != ["x86_64"]:
+    info = json.loads(checked([sys.executable, str(ROOT.parent / "macos/tools/macho.py"), "--binary", str(path)]))
+    if info["architectures"] != ["x86_64"]:
         raise ProbeError(f"Expected an x86_64-only Mach-O library: {path}")
-    exports = checked(["/usr/bin/nm", "-gU", str(path)]).splitlines()
-    names = {line.split()[-1] for line in exports if line.strip()}
+    names = set(info["exports"])
     if names != {"_DllGetGameContext"}:
         raise ProbeError(f"Unexpected exported interface in {path}: {sorted(names)}")
     content = path.read_bytes()

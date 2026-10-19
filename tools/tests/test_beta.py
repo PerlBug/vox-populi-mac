@@ -3,9 +3,12 @@
 import argparse
 import hashlib
 import importlib.util
+import io
 import json
 from pathlib import Path
 import tempfile
+import tarfile
+import sys
 import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -20,6 +23,8 @@ def load(name, relative):
 
 player = load("beta_player", "vp-mac.py")
 release = load("make_beta", "tools/make_beta.py")
+sys.modules["make_beta"] = release
+gui = load("make_gui", "tools/make_gui.py")
 
 
 class BetaTests(unittest.TestCase):
@@ -120,6 +125,35 @@ class BetaTests(unittest.TestCase):
         path.write_text(json.dumps(data))
         with self.assertRaisesRegex(ValueError, "Unexpected executable"):
             release.validate_package(core, package)
+
+    def test_runtime_internal_links_are_materialized(self):
+        archive = self.root / "runtime.tar.gz"
+        with tarfile.open(archive, "w:gz") as bundle:
+            item = tarfile.TarInfo("python/bin/python3.13")
+            item.size = 4
+            item.mode = 0o755
+            bundle.addfile(item, io.BytesIO(b"test"))
+            link = tarfile.TarInfo("python/bin/python3")
+            link.type = tarfile.SYMTYPE
+            link.linkname = "python3.13"
+            bundle.addfile(link)
+        destination = self.root / "runtime"
+        gui.extract_runtime(archive, destination)
+        self.assertFalse((destination / "bin/python3").is_symlink())
+        self.assertEqual((destination / "bin/python3").read_bytes(), b"test")
+
+    def test_runtime_traversal_and_external_links_are_rejected(self):
+        for name, target in [("python/../../escape", None), ("python/bin/link", "../../../escape")]:
+            with self.subTest(name=name):
+                archive = self.root / "bad.tar.gz"
+                with tarfile.open(archive, "w:gz") as bundle:
+                    item = tarfile.TarInfo(name)
+                    if target:
+                        item.type, item.linkname = tarfile.SYMTYPE, target
+                    bundle.addfile(item)
+                with self.assertRaises((ValueError, tarfile.TarError)):
+                    gui.extract_runtime(archive, self.root / "rejected")
+                self.assertFalse((self.root.parent / "escape").exists())
 
 
 if __name__ == "__main__":

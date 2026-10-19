@@ -1,5 +1,14 @@
 # Release notes
 
+## 0.1.0-beta.2 — graphical Mac installer
+
+- Adds a native universal Apple Silicon / Intel installer app: game picker, compatibility check, install, restore, diagnostics and copyable details.
+- Bundles checksum-pinned Python 3.13.16 runtimes; players do not need to install Python or Apple's developer tools.
+- Replaces installer-only `nm`/`lipo` calls with bounds-checked Mach-O inspection, retaining the exact host hash, core exports, signature, 218-slot vtable and save-identity checks.
+- Explains why this port cannot be installed through the MODS folder: the Mac core and startup database must be installed together.
+- Reuses the exact beta.1 game core and full VP payload. Gameplay behavior and save format are unchanged; beta.1's validation limits still apply.
+- The GUI app is ad hoc signed, not Apple-notarized. The game core retains its existing signature and hash.
+
 ## 0.1.0-beta.1 — 0.1 beta
 
 First packaged Mac beta, based on Community Patch / Vox Populi 5.4.8, upstream commit `7307aefdf985a4f401a7996a896283557b896e2b`.

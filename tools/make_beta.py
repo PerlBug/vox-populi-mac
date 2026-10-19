@@ -14,7 +14,7 @@ import zipfile
 ROOT = Path(__file__).resolve().parents[1]
 RUNTIME_FILES = ["VERSION", "README.md", "CHANGELOG.md", "THIRD_PARTY_NOTICES.md", "vp-mac.py",
                  "docs/DEVELOPMENT.md", "macos/README.md", "prototype/manage.py",
-                 "macos/tools/sdk_contract.py", "macos/abi/aspyr-steam-1.4.2.json",
+                 "macos/tools/sdk_contract.py", "macos/tools/macho.py", "macos/abi/aspyr-steam-1.4.2.json",
                  "LICENSES/CommunityPatch-License.rtf"]
 
 

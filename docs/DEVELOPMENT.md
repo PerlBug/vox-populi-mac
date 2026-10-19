@@ -71,3 +71,19 @@ The builder requires clean source repositories, checks the native signature/ABI 
 An internal `SHA256SUMS` covers the staged files. No stock core, stock executable, cache, save or personal log is copied. `dist/` is ignored by Git. A fresh output location can be selected with `--output`; an existing release is never overwritten.
 
 Before publishing, exercise the extracted player commands from the archive: version, status, install dry run, then a real install/uninstall round trip. Tag the committed source after verification. Creating this local Git repository and archive does not publish to GitHub.
+
+## Build the graphical installer
+
+After creating the matching command-line distribution above:
+
+```sh
+python3 tools/make_gui.py
+```
+
+This compiles `gui/Installer.swift` as a universal Apple Silicon/Intel AppKit executable and creates `dist/gui/Vox Populi Mac Installer.app` plus a `-macOS.zip` archive and checksum. The first build downloads two pinned Python Build Standalone archives into `dist/runtime-cache`; every build verifies their SHA-256 hashes against `gui/python-runtimes.json`. Runtime licenses remain in the app. Building requires Apple's Swift compiler; using the completed app does not require developer tools or a separate Python installation.
+
+The window invokes the same `vp-mac.py` and reversible `prototype/manage.py` backend from its bundled resources. The process uses the architecture-matched interpreter, disables bytecode writes, removes Python/DYLD environment overrides, and uses only the macOS system tools path. `macos/tools/macho.py` reads architecture, symbol tables and exports directly, so player-side inspection does not invoke `nm` or `lipo`. Core identity, signature, save checks and transaction behavior remain enforced.
+
+The GUI builder requires a distribution from the current clean source commit. It signs only the app envelope; the previously tested game core's bytes and signature remain unchanged. Beta apps are ad hoc signed and not notarized. Developer ID signing and notarization require the appropriate release credentials; no system security setting is changed by the installer.
+
+For a read-only GUI smoke test, run the app's `Contents/MacOS/Installer --smoke-test /path/to/results`. It renders its own window into PNGs, performs the real compatibility dry run with the bundled interpreter, writes a JSON result and exits. It does not install the beta or capture other windows. Also verify a bundled-backend install/uninstall round trip, game-file hashes, relocation of the app, its universal architectures and its signature before tagging a GUI release.

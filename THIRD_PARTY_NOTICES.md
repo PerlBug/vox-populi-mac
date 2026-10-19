@@ -9,3 +9,9 @@ This is an unofficial Mac compatibility layer for the Community Patch / Vox Popu
 - Civilization V is a separately installed commercial game. No stock Aspyr executable or stock core library, personal cache, save or log is included in the beta archive.
 
 The Mac-specific changes are separate from the unmodified upstream checkout. Source and build instructions accompany beta archives. See `docs/DEVELOPMENT.md` for reproducing the build and the source snapshot layout.
+
+## Graphical installer runtimes
+
+The GUI app includes CPython 3.13.16 for Apple Silicon and Intel from Astral's [Python Build Standalone](https://github.com/astral-sh/python-build-standalone) release `20261013`. Exact download URLs and SHA-256 hashes are pinned in `gui/python-runtimes.json`. These are portable, self-contained distributions; see the [distribution documentation](https://docs.astral.sh/python-build-standalone/distributions/).
+
+Python's license is retained under each runtime's `lib/python3.13/LICENSE.txt`, along with bundled third-party notices and pip dependency licenses. The installer does not install this runtime system-wide. The Python/CPython source is available from [python/cpython](https://github.com/python/cpython/tree/v3.13.16); distribution build sources are available from the Python Build Standalone project and its pinned release.

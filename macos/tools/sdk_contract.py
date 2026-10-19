@@ -7,6 +7,7 @@ comments and formatting do not invalidate the native engine ABI profile.
 import argparse
 import ast
 import hashlib
+import importlib.util
 import json
 from pathlib import Path
 import re
@@ -18,6 +19,9 @@ import xml.etree.ElementTree as ET
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_PROFILE = ROOT / "abi/aspyr-steam-1.4.2.json"
 OVERLAYS = ROOT / "overlays.json"
+_macho_spec = importlib.util.spec_from_file_location("vp_mac_macho", ROOT / "tools/macho.py")
+macho = importlib.util.module_from_spec(_macho_spec)
+_macho_spec.loader.exec_module(macho)
 
 
 class ContractError(RuntimeError):
@@ -255,28 +259,20 @@ def verify_host(binary, profile):
 def verify_core(binary, profile):
     """Check every reviewed slot in the actual linked core's Itanium vtable."""
     data = binary.read_bytes()
-    if len(data) < 32 or struct.unpack_from("<I", data)[0] != 0xfeedfacf:
-        raise ContractError("Expected a thin 64-bit Mach-O core")
-    segments, offset = [], 32
-    for _ in range(struct.unpack_from("<I", data, 16)[0]):
-        command, size = struct.unpack_from("<II", data, offset)
-        if size < 8 or offset + size > len(data):
-            raise ContractError("Invalid Mach-O load command")
-        if command == 0x19:
-            vm, _, file_offset, file_size = struct.unpack_from("<QQQQ", data, offset + 24)
-            segments.append((vm, file_offset, file_size))
-        offset += size
+    try:
+        image = macho.read_image(data)
+    except (ValueError, struct.error) as error:
+        raise ContractError(str(error)) from error
+    if image["architectures"] != ["x86_64"]:
+        raise ContractError("Expected an x86_64 Mach-O core")
     def read_pointer(address):
-        for vm, file_offset, size in segments:
+        for vm, file_offset, size in image["segments"]:
             if vm <= address and address + 8 <= vm + size:
                 return struct.unpack_from("<Q", data, file_offset + address - vm)[0]
         raise ContractError(f"Vtable address outside Mach-O file: {address:#x}")
-    result = subprocess.run(["nm", "-n", str(binary)], capture_output=True, text=True, check=True)
     names, addresses = {}, {}
-    for line in result.stdout.splitlines():
-        match = re.fullmatch(r"([0-9a-fA-F]+)\s+\w\s+(\S+)", line)
-        if match:
-            address, name = int(match[1], 16), match[2]
+    for name, address, kind in image["symbols"]:
+        if kind & 0x0e in {2, 0x0e, 0x0a}:
             names[name] = address
             addresses.setdefault(address, set()).add(name)
     reports = []
