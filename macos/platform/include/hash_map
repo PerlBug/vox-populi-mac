@@ -1,0 +1,29 @@
+#pragma once
+#include <functional>
+#include <unordered_map>
+
+// Core-owned containers use libc++. Native SDK objects keep opaque storage in
+// the generated SDK declarations, so this adapter cannot change their layout.
+namespace stdext {
+template<class Key, class Compare = std::less<Key>> struct hash_compare {
+    std::size_t operator()(const Key& key) const { return std::hash<Key>{}(key); }
+    bool operator()(const Key& a, const Key& b) const { return Compare{}(a, b); }
+};
+namespace detail {
+template<class Key, class Traits> struct Hash {
+    Traits traits;
+    std::size_t operator()(const Key& key) const { return traits(key); }
+};
+template<class Key, class Traits> struct Equal {
+    Traits traits;
+    bool operator()(const Key& a, const Key& b) const { return !traits(a, b) && !traits(b, a); }
+};
+}
+template<class Key, class Value, class Traits = hash_compare<Key>,
+         class Allocator = std::allocator<std::pair<const Key, Value>>>
+class hash_map : public std::unordered_map<Key, Value, detail::Hash<Key, Traits>, detail::Equal<Key, Traits>, Allocator> {
+    using Base = std::unordered_map<Key, Value, detail::Hash<Key, Traits>, detail::Equal<Key, Traits>, Allocator>;
+public:
+    using Base::Base;
+};
+} // namespace stdext

@@ -1,0 +1,2 @@
+# Preserve the upstream RTF notice byte-for-byte, including its line endings.
+LICENSES/*.rtf -text -diff

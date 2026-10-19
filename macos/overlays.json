@@ -1,0 +1,322 @@
+{
+  "schema": 1,
+  "edits": [
+    {
+      "name": "native-pregame-era-type-slot",
+      "source": "CvGameCoreDLLUtil/include/CvDllInterfaces.h",
+      "output": "sdk/CvDllInterfaces.h",
+      "pattern": "(virtual EraTypes DLLCALL era\\(\\) = 0;)",
+      "replacement": "\\1\n\tvirtual CvString DLLCALL vpMacEraType() = 0;",
+      "matches": 1,
+      "reason": "Aspyr's ICvPreGame1 has a by-value era Type string getter immediately after era(). Restore its slot so every subsequent engine call reaches the correct CP method. The native name is stripped; the explicit Mac name describes its verified behavior."
+    },
+    {
+      "name": "native-pregame-era-type-implementation-declaration",
+      "source": "CvGameCoreDLL_Expansion2/CvDllPreGame.h",
+      "output": "core/CvDllPreGame.h",
+      "pattern": "(EraTypes DLLCALL era\\(\\);)",
+      "replacement": "\\1\n\tCvString DLLCALL vpMacEraType();",
+      "matches": 1,
+      "reason": "Declare the thin Mac-only implementation of Aspyr's additional pregame slot; the method body lives in host_bridge.cpp."
+    },
+    {
+      "name": "native-critical-section-storage",
+      "source": "FirePlace/include/FireWorks/FCriticalSection.h",
+      "output": "FireWorks/FCriticalSection.h",
+      "pattern": "(?m)^#ifdef[ \\t]+WIN32[ \\t]*\\r?$",
+      "replacement": "#if defined(VP_MAC_NATIVE)\n        alignas(8) unsigned char native_private_[40];\n#elif defined(WIN32)",
+      "matches": 1,
+      "reason": "Aspyr's exported constructor/destructor and Enter/Leave operate on a 40-byte, 8-aligned native critical section, including a mutex pointer at offset 24. The upstream non-Windows declaration is empty and corrupts adjacent FObjectPool state. Preserve the native implementation; only supply its reviewed storage."
+    },
+    {
+      "name": "lua-noreturn-attribute-position",
+      "source": "ThirdPartyLibs/Lua51/include/lua.h",
+      "output": "lua.h",
+      "pattern": "(?m)^([ \\t]*#[ \\t]*define[ \\t]+LUA_NORETURN[ \\t]+)\\[\\[noreturn\\]\\]",
+      "replacement": "\\g<1>__attribute__((noreturn))",
+      "matches": 1,
+      "reason": "Apple Clang rejects extern [[noreturn]] in this declaration position; the GNU attribute preserves the annotation."
+    },
+    {
+      "name": "native-guid-fallback-suppression",
+      "source": "FirePlace/include/FireWorks/FFireTypes.h",
+      "output": "FireWorks/FFireTypes.h",
+      "pattern": "(?m)^#ifndef[ \\t]+WIN32[ \\t]*\\r?$",
+      "replacement": "#if !defined(WIN32) && !defined(VP_MAC_NATIVE)",
+      "matches": 1,
+      "reason": "The SDK non-Windows fallback makes GUID.Data1 an LP64 unsigned long. Native builds supply the verified fixed-width GUID without enabling Windows-only code globally."
+    },
+    {
+      "name": "dependent-vector-base-member-lookup",
+      "source": "FirePlace/include/FireWorks/FFastVector.h",
+      "output": "FireWorks/FFastVector.h",
+      "pattern": "(typedef[ \\t]+BaseVector<[ \\t]*T,[ \\t]*bPODType[ \\t]*>[ \\t]+BASE_TYPE;)",
+      "replacement": "\\1\\nprotected:\\n    using BASE_TYPE::m_pData;\\n    using BASE_TYPE::m_uiCurrSize;\\n    using BASE_TYPE::m_uiCurrMaxSize;\\n    using BASE_TYPE::Destroy;\\n    using BASE_TYPE::Copy;\\npublic:",
+      "matches": 3,
+      "reason": "Standard C++ dependent-base lookup requires member qualification; using declarations preserve vector behavior and object layout."
+    },
+    {
+      "name": "dependent-container-iterator-typename",
+      "source": "CvGameCoreDLL_Expansion2/TContainer.h",
+      "output": "core/TContainer.h",
+      "pattern": "(?m)^([ \\t]*)std::tr1::unordered_map<int,T\\*>::const_iterator",
+      "replacement": "\\1typename std::tr1::unordered_map<int,T*>::const_iterator",
+      "matches": 1,
+      "reason": "Standard C++ requires typename for this dependent iterator type."
+    },
+    {
+      "name": "container-stream-read-access",
+      "source": "CvGameCoreDLL_Expansion2/TContainer.h",
+      "output": "core/TContainer.h",
+      "pattern": "pStream->Read\\(nItems\\);",
+      "replacement": "(*pStream) >> nItems;",
+      "matches": 1,
+      "reason": "Use the public stream operator to reach the same protected native integer reader."
+    },
+    {
+      "name": "container-stream-write-access",
+      "source": "CvGameCoreDLL_Expansion2/TContainer.h",
+      "output": "core/TContainer.h",
+      "pattern": "pStream->Write\\(GetCount\\(\\)\\);",
+      "replacement": "(*pStream) << GetCount();",
+      "matches": 1,
+      "reason": "Use the public stream operator to reach the same protected native integer writer."
+    },
+    {
+      "name": "lp64-lua-integer-specialization",
+      "source": "FirePlace/include/FireWorks/FLua/include/FLuaCommon.h",
+      "output": "FireWorks/FLuaCommon.h",
+      "pattern": "template<> inline long Get\\(lua_State \\*L, int idx\\) \\{ return \\(long\\)lua_tointeger\\(L, idx\\); \\}",
+      "replacement": "// lua_Integer is long in the native LP64 profile; its existing specialization handles both.",
+      "matches": 1,
+      "reason": "The native Lua integer type is long, making the two otherwise identical specializations a redefinition. The build asserts this type identity."
+    },
+    {
+      "name": "disable-unused-x86-tick-assembly",
+      "source": "FirePlace/include/FireWorks/FTimer.h",
+      "output": "FireWorks/FTimer.h",
+      "pattern": "(#if[^\\r\\n]*!defined\\(_WIN64\\))",
+      "replacement": "\\1 && !defined(VP_MAC_NATIVE)",
+      "matches": 1,
+      "reason": "The x86 naked-function helpers are unused by CP; the native build uses the host FTimer/performance-counter methods."
+    },
+    {
+      "name": "native-swap-exception-specification",
+      "source": "CvGameCoreDLL_Expansion2/CvUnit.h",
+      "output": "core/CvUnit.h",
+      "pattern": "(inline void swap\\(SUnitIDValueContainer& a, SUnitIDValueContainer& b\\))",
+      "replacement": "\\1 noexcept(std::is_nothrow_move_constructible<SUnitIDValueContainer>::value && std::is_nothrow_move_assignable<SUnitIDValueContainer>::value)",
+      "matches": 1,
+      "reason": "Match the libc++ primary swap template exception specification; the swap body is unchanged."
+    },
+    {
+      "name": "empty-variadic-log-arguments",
+      "source": "CvGameCoreDLL_Expansion2/CustomMods.h",
+      "output": "core/CustomMods.h",
+      "pattern": ",\\s*__VA_ARGS__",
+      "replacement": ", ##__VA_ARGS__",
+      "matches": 5,
+      "reason": "Clang requires the comma-swallowing extension when these log macros are called without additional arguments."
+    },
+    {
+      "name": "omit-unused-flua-private-error-handler-api",
+      "source": "FirePlace/include/FireWorks/FLua/include/FLuaCommon.h",
+      "output": "FireWorks/FLuaCommon.h",
+      "pattern": "\\bclass ErrorHandler\\s*\\{[\\s\\S]*?ErrorHandler m_kPrevErrorHandler;\\s*\\};",
+      "replacement": "class ErrorHandler; class ScopedErrorHandler;",
+      "matches": 1,
+      "reason": "CP does not use these local SDK callback classes and Aspyr does not export their methods. Forward declarations exclude their Windows-only function/member-pointer cast; any future use must gain a real native implementation."
+    },
+    {
+      "name": "pointer-width-batch-allocation-alignment",
+      "source": "FirePlace/include/FireWorks/FBatchAllocate.h",
+      "output": "FireWorks/FBatchAllocate.h",
+      "pattern": "reinterpret_cast<\\s*unsigned int\\s*>",
+      "replacement": "reinterpret_cast<std::uintptr_t>",
+      "matches": 3,
+      "reason": "Preserve the full native pointer value before computing allocation alignment."
+    },
+    {
+      "name": "empty-variadic-precondition-arguments",
+      "source": "CvGameCoreDLL_Expansion2/CvGameCoreDLLPCH.h",
+      "output": "core/CvGameCoreDLLPCH.h",
+      "pattern": ",\\s*__VA_ARGS__",
+      "replacement": ", ##__VA_ARGS__",
+      "matches": 1,
+      "reason": "Preserve upstream assertion behavior when Clang expands a call with no optional format arguments."
+    },
+    {
+      "name": "empty-variadic-assertion-arguments",
+      "source": "CvGameCoreDLLUtil/include/CvAssert.h",
+      "output": "sdk/CvAssert.h",
+      "pattern": ",\\s*__VA_ARGS__",
+      "replacement": ", ##__VA_ARGS__",
+      "matches": 2,
+      "reason": "Preserve upstream assertion behavior when Clang expands a call with no optional format arguments."
+    },
+    {
+      "name": "lp64-spy-count-vector-size",
+      "source": "CvGameCoreDLL_Expansion2/CvEspionageClasses.cpp",
+      "output": "core/CvEspionageClasses.cpp",
+      "pattern": "min\\(\\(uint\\)pEspionage->GetNumAliveSpies\\(\\), aCityScores.size\\(\\)\\)",
+      "replacement": "min<size_t>((uint)pEspionage->GetNumAliveSpies(), aCityScores.size())",
+      "matches": 1,
+      "reason": "The vector size is native size_t rather than Win32 uint; compare both counts in size_t without changing the minimum or loop behavior."
+    },
+    {
+      "name": "exclude-windows-modpack-creation-tool",
+      "source": "CvGameCoreDLL_Expansion2/CvGame.cpp",
+      "output": "core/CvGame.cpp",
+      "pattern": "(?s)(// Modpack making functions by Gedemon/cicero225\\b.*?CvString CvGame::GetModFromIdAndVersion\\b.*?\\breturn CvString\\(\\);\\s*\\})",
+      "replacement": "#if !defined(VP_MAC_NATIVE)\\n\\1\\n#endif // Windows-only modpack creation tool\\n",
+      "matches": 1,
+      "reason": "The optional in-game DLC authoring tool uses Windows registry discovery and hard-coded Windows paths. Its Lua calls explicitly report unavailability on Mac; loading and playing packaged mod content is independent.",
+      "qualified_functions": [
+        "CvGame::DeleteMPMP",
+        "CvGame::CreateMPMP",
+        "CvGame::WriteMPMP",
+        "CvGame::CopyModDataToMPMP",
+        "CvGame::DeleteDirectory",
+        "CvGame::OverrideGamePlayFiles",
+        "CvGame::CopyModFiles",
+        "CvGame::AddUIAddinToMPMP",
+        "CvGame::GetModFromIdAndVersion"
+      ]
+    },
+    {
+      "name": "report-native-modpack-authoring-unavailable",
+      "source": "CvGameCoreDLL_Expansion2/Lua/CvLuaGame.cpp",
+      "output": "core/Lua/CvLuaGame.cpp",
+      "pattern": "LUAAPIIMPL\\(Game, (DeleteMPMP|CreateMPMP|WriteMPMP|CopyModDataToMPMP|AddUIAddinToMPMP)\\)",
+      "replacement": "int CvLuaGame::l\\1(lua_State* L) { return luaL_error(L, \"In-game modpack creation is unavailable on macOS; use a prepared modpack.\"); }",
+      "matches": 5,
+      "reason": "Keep the five optional authoring APIs discoverable but raise an explicit Lua error before doing any filesystem work, rather than claiming success or emulating Windows registry and path behavior."
+    },
+    {
+      "name": "guard-windows-process-memory-header",
+      "source": "CvGameCoreDLL_Expansion2/CvGameCoreUtils.cpp",
+      "output": "core/CvGameCoreUtils.cpp",
+      "pattern": "(?m)^#include \"psapi.h\"\\r?$",
+      "replacement": "#if defined(WIN32)\n#include \"psapi.h\"\n#endif",
+      "matches": 1,
+      "reason": "This header is needed only by Windows diagnostic code; the native process-memory log uses Mach task_info."
+    },
+    {
+      "name": "replace-windows-process-memory-log",
+      "source": "CvGameCoreDLL_Expansion2/CvGameCoreUtils.cpp",
+      "output": "core/CvGameCoreUtils.cpp",
+      "pattern": "(void PrintMemoryInfo\\(const char\\* hint\\)\\s*\\{[^{}]*\\})",
+      "replacement": "#if !defined(VP_MAC_NATIVE)\\n\\1\\n#endif",
+      "matches": 1,
+      "reason": "The Mac implementation in platform_support.cpp logs actual task resident memory and physical footprint without introducing fake Windows process handles."
+    },
+    {
+      "name": "copy-builder-directive-pair-with-lvalue-arguments",
+      "source": "CvGameCoreDLL_Expansion2/CvHomelandAI.cpp",
+      "output": "core/CvHomelandAI.cpp",
+      "pattern": "make_pair<CvUnit\\*, BuilderDirective>\\(",
+      "replacement": "pair<CvUnit*, BuilderDirective>(",
+      "matches": 5,
+      "reason": "Use the same explicit pair type and copy its lvalue directive; modern make_pair uses forwarding references that cannot bind these explicitly supplied types."
+    },
+    {
+      "name": "input-map-allocator-const-key",
+      "source": "FirePlace/include/FireWorks/FInputDevice.h",
+      "output": "FireWorks/FInputDevice.h",
+      "pattern": "FSTL_Tagged_Allocator<std::pair<uint, uint>,",
+      "replacement": "FSTL_Tagged_Allocator<std::pair<const uint, uint>,",
+      "matches": 1,
+      "reason": "The allocator value_type must match the standard map value_type, which has a const key. CP uses only keyboard constants from this input header and does not construct native input devices."
+    },
+    {
+      "name": "lp64-tactical-choice-count",
+      "source": "CvGameCoreDLL_Expansion2/CvTacticalAI.cpp",
+      "output": "core/CvTacticalAI.cpp",
+      "pattern": "max\\(iMaxBranches \\* 5u, gOverAllChoices.size\\(\\) / 2\\)",
+      "replacement": "max<size_t>(iMaxBranches * 5u, gOverAllChoices.size() / 2)",
+      "matches": 1,
+      "reason": "Compare candidate counts in native size_t, preserving the existing maximum and branch calculation."
+    },
+    {
+      "name": "native-sdk-dword-width",
+      "source": "FirePlace/include/FireWorks/FFireTypes.h",
+      "output": "FireWorks/FFireTypes.h",
+      "pattern": "typedef unsigned long\\s+dword;",
+      "replacement": "typedef std::uint32_t dword;",
+      "matches": 1,
+      "reason": "Aspyr FCRC::Calc takes a 32-bit unsigned int and its CRC table has 32-bit entries. Keep the SDK dword width fixed on LP64."
+    },
+    {
+      "name": "native-fstring-initializer-c-linkage",
+      "source": "FirePlace/include/FireWorks/FString.h",
+      "output": "FireWorks/FString.h",
+      "pattern": "(?m)^(FString[AW]::FString[AW]Data\\* FString[AW]_GetStringInitData\\(\\);)",
+      "replacement": "extern \"C\" \\1",
+      "matches": 2,
+      "reason": "Aspyr exports the two empty-string initializer accessors with C linkage even when the game core is compiled as a DLL."
+    },
+    {
+      "name": "native-fatal-precondition-log",
+      "source": "CvGameCoreDLL_Expansion2/CvGameCoreUtils.cpp",
+      "output": "core/CvGameCoreUtils.cpp",
+      "pattern": "void CvPreconditionDlg\\(const char\\* expr, const char\\* szFile, unsigned int uiLine, const char\\* msg\\)\\s*\\{",
+      "replacement": "#include \"vp_mac/bridge_checks.hpp\"\nvoid CvPreconditionDlg(const char* expr, const char* szFile, unsigned int uiLine, const char* msg)\n{\n    vp_mac::native_log(\"native_precondition_failed\", msg ? msg : expr);",
+      "matches": 1,
+      "reason": "Keep upstream's fatal trap while recording its actual formatted failure on macOS, where the Windows dialog and crash logger do not run."
+    },
+    {
+      "name": "native-game-database-cache-result",
+      "source": "CvGameCoreDLL_Expansion2/CvDllDatabaseUtility.cpp",
+      "output": "core/CvDllDatabaseUtility.cpp",
+      "pattern": "(\\s+return bSuccess;\\s*\\}\\s*//-+\\s*bool CvDllDatabaseUtility::FlushGameDatabaseData\\(\\))",
+      "replacement": "\n    vp_mac::native_log(bSuccess ? \"native_game_data_passed\" : \"native_game_data_failed\");\\1",
+      "matches": 1,
+      "reason": "Record completion of the real upstream gameplay cache separately from the private database ABI smoke test."
+    },
+    {
+      "name": "native-game-database-log-header",
+      "source": "CvGameCoreDLL_Expansion2/CvDllDatabaseUtility.cpp",
+      "output": "core/CvDllDatabaseUtility.cpp",
+      "pattern": "(#include \"CvGameCoreDLLPCH.h\")",
+      "replacement": "\\1\n#include \"vp_mac/bridge_checks.hpp\"",
+      "matches": 1,
+      "reason": "Declare the native cache-result diagnostic at the existing translation-unit include boundary."
+    },
+    {
+      "name": "native-lua-bridge-startup-check",
+      "source": "CvGameCoreDLL_Expansion2/Lua/CvLuaSupport.cpp",
+      "output": "core/Lua/CvLuaSupport.cpp",
+      "pattern": "void LuaSupport::RegisterScriptData\\(lua_State\\* L\\)\\s*\\{",
+      "replacement": "#include \"vp_mac/bridge_checks.hpp\"\nvoid LuaSupport::RegisterScriptData(lua_State* L)\n{\n    vp_mac::check_lua_bridge_once(L);",
+      "matches": 1,
+      "reason": "Exercise native Lua table access, metamethods, stack replacement and protected compilation/calls once on private stack objects before registering CP bindings. Restore the stack and log the result."
+    },
+    {
+      "name": "native-core-save-guid",
+      "source": "CvGameCoreDLL_Expansion2/CvDllContext.cpp",
+      "output": "core/CvDllContext.cpp",
+      "pattern": "GUID CvDllGameContext::GetDLLGUID\\(\\)\\s*\\{\\s*return CIV5_XP2_DLL_GUID;\\s*\\}",
+      "replacement": "#include \"vp_mac/save_format.hpp\"\nGUID CvDllGameContext::GetDLLGUID()\n{\n    return vp_mac::native_save_guid();\n}",
+      "matches": 1,
+      "reason": "Give Mac-format experimental saves a stable identity distinct from stock and Windows CP, without changing upstream constants or interface slots."
+    },
+    {
+      "name": "native-game-save-header-read",
+      "source": "CvGameCoreDLL_Expansion2/CvGame.cpp",
+      "output": "core/CvGame.cpp",
+      "pattern": "void CvGame::Read\\(FDataStream& kStream\\)\\s*\\{",
+      "replacement": "#include \"vp_mac/save_format.hpp\"\nvoid CvGame::Read(FDataStream& kStream)\n{\n    vp_mac::read_save_boundary(kStream);",
+      "matches": 1,
+      "reason": "Reject a missing/foreign Mac format tag before the upstream game reset and field parser; do not fork gameplay serialization."
+    },
+    {
+      "name": "native-game-save-header-write",
+      "source": "CvGameCoreDLL_Expansion2/CvGame.cpp",
+      "output": "core/CvGame.cpp",
+      "pattern": "void CvGame::Write\\(FDataStream& kStream\\) const\\s*\\{",
+      "replacement": "void CvGame::Write(FDataStream& kStream) const\n{\n    vp_mac::write_save_boundary(kStream);",
+      "matches": 1,
+      "reason": "Prefix the upstream game payload with the fixed Mac magic, format number and GUID. Upstream keeps ownership of all following fields."
+    }
+  ]
+}

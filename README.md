@@ -1,0 +1,105 @@
+# Vox Populi for Mac — 0.1 beta
+
+Play Vox Populi on the **Steam macOS version of Civilization V: Brave New World**, including Apple Silicon Macs running the game through Rosetta.
+
+Vox Populi improves Civ V's AI and expands its gameplay. This unofficial Mac port runs the upstream Community Patch game core natively in the Mac game process and includes the full Vox Populi balance changes, interface and assets. **EUI is not included.** It is an early beta for single-player testing.
+
+The Mac compatibility code lives separately from the [upstream Vox Populi project](https://github.com/LoneGazebo/Community-Patch-DLL). This repository pins an untouched upstream checkout instead of maintaining a separate gameplay fork.
+
+## Before you install
+
+- Own the **Steam Mac edition** of Civ V, **Gods & Kings**, **Brave New World**, and all gameplay/civilization DLC. A Complete Edition installation is the simplest match.
+- This beta supports the reviewed **Aspyr 1.4.2 (180925), Intel x86_64** game build. The installer checks the executable and refuses a different build. Apple Silicon runs that game through Rosetta. Other storefronts and game builds are untested.
+- Have **Python 3.11 or newer**. Check with `python3 --version`. Installation also uses Apple's `nm`, `lipo` and `codesign` tools. If these are unavailable, install the Apple Command Line Tools with `xcode-select --install`.
+- Launch normal, unmodified BNW once and quit to create its working cache.
+- Quit **Civ V and its launcher**. Steam can stay open.
+- Remove conflicting DLC mods as described below. Keep a separate copy of important saves.
+
+The playable beta is the **complete release ZIP**, not GitHub's automatic “Source code” download. A source checkout needs a local build; see the [developer guide](docs/DEVELOPMENT.md).
+
+## Install
+
+1. Extract `Vox-Populi-Mac-0.1.0-beta.1.zip` into a folder you will keep, such as Documents.
+2. Open Terminal. Type `cd `, drag the extracted folder into the Terminal window, and press Return.
+3. Run:
+
+   ```sh
+   python3 vp-mac.py install
+   ```
+
+   For a check without changing anything, run `python3 vp-mac.py install --dry-run` first.
+
+4. Launch Civ V through Steam with BNW enabled. Choose **regular Single Player → Set Up Game** and start a **new game**. The package loads automatically; there is no Mods-menu activation step.
+
+If Steam uses another library, point to the app explicitly:
+
+```sh
+python3 vp-mac.py install --app "/path/to/Civilization V.app"
+```
+
+Use the same `--app` option for status and uninstall when using a custom location.
+
+**VP stays active for regular games until you uninstall it.** This is a replacement game core plus a DLC-style data package, not a mod you can toggle independently for each save. Do not activate another copy of CP or VP.
+
+## Your saves and original game files
+
+The installer preserves and verifies the original game core, moves your normal cache and `Saves` folder aside, and creates a separate save folder for the beta. Working language caches are retained. Your original files return when you uninstall.
+
+Start a **new beta game**. Stock Civ V saves and Windows VP saves are not supported. Beta saves use a separate Mac format and are not intended for stock Civ V or Windows VP. Keep the same beta installed while saving and reloading a campaign; compatibility with future beta versions is not promised.
+
+When you uninstall, beta saves and cache are preserved in dated folders next to your normal Civ V user-data folders. The uninstaller prints their locations. A later installation starts a fresh beta save folder. To resume an archived game, install the **same beta**, then copy its named `.Civ5Save` from the archived `Saves.vp-mac-session-…/single` folder into the active `Saves/single` folder while the game is closed.
+
+## Other mods and conflicts
+
+For beta 0.1, use **this package on its own**, with the official DLC.
+
+| Other content | Beta 0.1 guidance |
+| --- | --- |
+| Another Community Patch, Vox Populi or VP modpack | Conflicts with the included core and data. Remove/restore it first. The installer refuses detected VP modpacks. |
+| EUI / `UI_bc1` | Conflicts with this beta's interface. Move the EUI folder completely outside the game's DLC folder before installing. The player installer refuses a detected `UI_bc1` folder. Renaming it inside DLC is not sufficient. |
+| Another replacement game core or DLL mod | Cannot share the same core. Restore the original installation before switching. Windows DLLs do not run in the Mac game. |
+| UI, balance, civilization or other gameplay mods | Compatibility is untested. They may replace the same screens or database entries. Leave them disabled; adding one to the MODS folder does not integrate it into this VP package. |
+| Mods merely stored in MODS | These are not activated by regular Single Player. Do not select/activate additional mods for this beta. |
+| Multiplayer, 43-civilization variants or mod collections | Not supported by beta 0.1. |
+
+The installer does **not** detect every possible third-party modification. It preserves conflicting files rather than deleting them. Keep disabled DLC mods **outside the entire game's DLC directory**, since DLC packages can load without using the Mods menu.
+
+Uninstall this beta before Steam file verification, a game update, or installing another core/modpack. If Steam changes the game while the beta is installed, the uninstaller can refuse to overwrite the changed files; keep the backup and the error message for investigation.
+
+## Uninstall / return to normal Civ V
+
+Quit Civ V and its launcher. From the extracted beta folder, run:
+
+```sh
+python3 vp-mac.py uninstall
+python3 vp-mac.py status
+```
+
+Status should show `"state": "stock"`. This restores the verified original core, original cache and original saves, and preserves the beta session separately. **Do not delete backups or use Steam verification as the normal uninstall method.** Keep the beta folder until removal is complete.
+
+## What has been tested?
+
+- The native core passed startup, database, Lua, stream, lock and game-data checks, followed by normal context shutdown.
+- With Community Patch data, a new city, a full turn, saving, relaunching, reloading and another turn worked with normal map/city screens.
+- With full VP data, the first session passed those bridge checks, recorded save writes and shut down normally. A separate full-VP reload was not repeated for this beta; it is assumed from the preceding core test.
+- Automated loader, rollback, ABI, upstream-contract and packaging checks pass.
+
+Long campaigns, later eras, all UI screens and all gameplay systems have **not** been validated. The beta uses the tested Debug build, so performance is not representative of a future optimized release. The database snapshot does not preserve CP's custom query indexes or SQL triggers; VP's final triggers primarily support additional mods. Two duplicate strategic-view art warnings remain under review. See the [release notes](CHANGELOG.md).
+
+## If something goes wrong
+
+Quit to desktop if possible, then collect the latest session report:
+
+```sh
+python3 vp-mac.py report
+```
+
+Share the output, what you were doing, the turn number and whether it was a new game or a reload. A report showing startup checks passed does not establish that every gameplay feature worked. After a crash, uninstall before switching builds; uninstall also preserves the session's cache and saves for debugging.
+
+Logs are under `~/Library/Application Support/Sid Meier's Civilization 5/Logs/`. If installation says the localization cache is missing or damaged, restore first, launch stock BNW once and quit, then retry. If it reports a changed core or backup, stop and retain those files; do not manually delete them to force installation.
+
+## Development and credits
+
+The Git repository contains the Mac layer and a pinned `Community-Patch-DLL` submodule. Generated game packages, binaries, personal logs and saves are excluded. See [building and updating](docs/DEVELOPMENT.md) and the [technical Mac layer notes](macos/README.md).
+
+Vox Populi and Community Patch are the work of their upstream contributors. Civilization V and its game assets belong to their respective owners; a separately installed game is required. Upstream notices are retained in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) and [LICENSES](LICENSES/CommunityPatch-License.rtf). This is an unofficial community beta, not an Aspyr, Firaxis, 2K or upstream VP release.

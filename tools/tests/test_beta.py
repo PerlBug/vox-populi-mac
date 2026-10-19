@@ -1,0 +1,126 @@
+#!/usr/bin/env python3
+"""Player-entry-point and release integrity checks, using isolated fixtures."""
+import argparse
+import hashlib
+import importlib.util
+import json
+from pathlib import Path
+import tempfile
+import unittest
+
+ROOT = Path(__file__).resolve().parents[2]
+
+
+def load(name, relative):
+    spec = importlib.util.spec_from_file_location(name, ROOT / relative)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+player = load("beta_player", "vp-mac.py")
+release = load("make_beta", "tools/make_beta.py")
+
+
+class BetaTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory(prefix="VP beta with spaces ")
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        self.app = self.root / "Steam Library/Civilization V.app"
+
+    def payload(self, packaged=True):
+        if packaged:
+            core = self.root / "payload" / player.CORE
+            package = self.root / "payload/VP_MAC_VP"
+        else:
+            core = self.root / "prototype/build-core/macos" / player.CORE
+            package = self.root / "prototype/build-core/VP_MAC_VP-gameplay-probe"
+        core.parent.mkdir(parents=True, exist_ok=True)
+        core.write_bytes(b"fixture core")
+        package.mkdir(parents=True)
+        (package / "example.xml").write_text("<GameData/>")
+        metadata = {"content": "vox-populi", "gameplay_test_ready": True,
+                    "native_core_sha256": hashlib.sha256(core.read_bytes()).hexdigest(),
+                    "files": release.inventory(package)}
+        (package / "vp-mac-package.json").write_text(json.dumps(metadata))
+        return core, package
+
+    def args(self, command, dry_run=False):
+        return argparse.Namespace(command=command, app=self.app, dry_run=dry_run)
+
+    def test_player_uses_release_payload_with_literal_space_paths(self):
+        core, package = self.payload()
+        command = player.command_for(self.args("install", True), self.root)
+        self.assertEqual(command[2], "install-native")
+        self.assertEqual(command[command.index("--app") + 1], str(self.app))
+        self.assertEqual(command[command.index("--native-core") + 1], str(core))
+        self.assertEqual(command[command.index("--data-package") + 1], str(package))
+        self.assertEqual(command[-1], "--dry-run")
+        self.assertFalse(self.app.exists())
+
+    def test_player_supports_source_build_and_rejects_incomplete_download(self):
+        with self.assertRaisesRegex(ValueError, "complete beta archive"):
+            player.command_for(self.args("install"), self.root)
+        core, package = self.payload(packaged=False)
+        self.assertEqual(player.install_payload(self.root), (core, package))
+
+    def test_player_refuses_cp_only_package(self):
+        _, package = self.payload()
+        path = package / "vp-mac-package.json"
+        metadata = json.loads(path.read_text())
+        metadata["content"] = "community-patch"
+        path.write_text(json.dumps(metadata))
+        with self.assertRaisesRegex(ValueError, "full Vox Populi"):
+            player.install_payload(self.root)
+
+    def test_player_refuses_nested_eui_without_changing_it(self):
+        self.payload()
+        eui = self.app / "Contents/Assets/Assets/DLC/custom/UI_Bc1"
+        eui.mkdir(parents=True)
+        (eui / "keep.lua").write_text("original")
+        with self.assertRaisesRegex(ValueError, "EUI conflicts"):
+            player.command_for(self.args("install"), self.root)
+        self.assertEqual((eui / "keep.lua").read_text(), "original")
+
+    def test_player_recovery_commands_do_not_require_payload_or_clear_eui(self):
+        eui = self.app / "Contents/Assets/Assets/DLC/UI_bc1"
+        eui.mkdir(parents=True)
+        for name, expected in [("uninstall", "restore"), ("status", "status"), ("report", "native-report")]:
+            self.assertEqual(player.command_for(self.args(name), self.root)[2], expected)
+        with self.assertRaisesRegex(ValueError, "install and uninstall"):
+            player.command_for(self.args("report", True), self.root)
+
+    def test_release_refuses_changed_or_extra_package_files(self):
+        core, package = self.payload()
+        self.assertEqual(release.validate_package(core, package)["content"], "vox-populi")
+        (package / "unexpected.lua").write_text("unexpected")
+        with self.assertRaisesRegex(ValueError, "inventory differs"):
+            release.validate_package(core, package)
+        (package / "unexpected.lua").unlink()
+        (package / "example.xml").write_text("changed")
+        with self.assertRaisesRegex(ValueError, "inventory differs"):
+            release.validate_package(core, package)
+
+    def test_release_refuses_mismatched_core_and_symlinks(self):
+        core, package = self.payload()
+        core.write_bytes(b"different core")
+        with self.assertRaisesRegex(ValueError, "hashes differ"):
+            release.validate_package(core, package)
+        (package / "linked.xml").symlink_to(package / "example.xml")
+        with self.assertRaisesRegex(ValueError, "Symlinks"):
+            release.inventory(package)
+
+    def test_release_refuses_executables_even_with_matching_inventory(self):
+        core, package = self.payload()
+        (package / "foreign.dll").write_bytes(b"MZ")
+        path = package / "vp-mac-package.json"
+        data = json.loads(path.read_text())
+        data["files"] = {k: v for k, v in release.inventory(package).items() if k != path.name}
+        path.write_text(json.dumps(data))
+        with self.assertRaisesRegex(ValueError, "Unexpected executable"):
+            release.validate_package(core, package)
+
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)

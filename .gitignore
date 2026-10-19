@@ -1,0 +1,13 @@
+.DS_Store
+__pycache__/
+*.py[cod]
+*.o
+*.a
+*.dylib
+/prototype/build*/
+/macos/build*/
+/dist/
+/payload/
+/release.json
+/SHA256SUMS
+/analysis/
