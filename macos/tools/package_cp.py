@@ -169,7 +169,7 @@ def upstream_set(source, name):
     return set(names)
 
 
-def runtime_files(mod_dir, mod, maker, package, folder="CommunityPatch", register=True):
+def runtime_files(mod_dir, mod, maker, package, folder="CommunityPatch", register=True, exclude_lua=False):
     """Use upstream's VFS manifest and modpack addin convention, without DLLs.
 
     Keep source paths under each mod's folder. Only the five upstream addin
@@ -203,7 +203,7 @@ def runtime_files(mod_dir, mod, maker, package, folder="CommunityPatch", registe
         if name in declared:
             raise PackageError(f"Duplicate runtime file declaration: {name}")
         declared[name] = source
-        if node.get("import") == "1" and name not in dlls:
+        if node.get("import") == "1" and name not in dlls and not (exclude_lua and name.split("/")[0].casefold() == "lua"):
             selected[name] = source
 
     addins, maps = [], []
@@ -214,6 +214,8 @@ def runtime_files(mod_dir, mod, maker, package, folder="CommunityPatch", registe
         name, source = source_path(node.get("file", ""))
         if name not in declared:
             raise PackageError(f"Undeclared runtime entry point: {name}")
+        if exclude_lua and name.split("/")[0].casefold() == "lua":
+            raise PackageError(f"EUI-excluded LUA folder contains an entry point: {name}")
         selected[name] = source
         if kind == "MapScript":
             maps.append(name)
@@ -249,6 +251,50 @@ def runtime_files(mod_dir, mod, maker, package, folder="CommunityPatch", registe
             "modpack_maker_sha256": hashlib.sha256(maker.encode()).hexdigest()}
 
 
+def interface_skin(upstream, package, skin):
+    """Embed the pinned BNW EUI/VPUI skins in the one managed package.
+
+    Read the directory order from upstream, without installing independent
+    Civ5Pkg files that could remain active after restoring the native core.
+    """
+    result = []
+    target = ET.SubElement(skin, "Skin")
+    for name, filename in [("UI_bc1", "EUI_2.Civ5Pkg"), ("VPUI", "VPUI_2.Civ5Pkg")]:
+        source = upstream / name
+        manifest = source / filename
+        root = xml(manifest)
+        declarations = root.findall("./UISkin")
+        if len(declarations) != 1 or declarations[0].attrib != skin.attrib:
+            raise PackageError(f"Unsupported BNW interface skin: {manifest}")
+        sections = list(declarations[0])
+        if len(sections) != 1 or sections[0].tag != "Skin" or not len(sections[0]):
+            raise PackageError(f"Unsupported interface directory declaration: {manifest}")
+        files, directories = {}, []
+        for node in sections[0]:
+            relative = PurePosixPath(node.text or "")
+            if node.tag != "Directory" or len(relative.parts) != 1 or relative.parts[0] in {".", ".."} or ":" in str(relative) or "\\" in str(relative):
+                raise PackageError(f"Unsafe interface directory: {node.text}")
+            directory = source / str(relative)
+            if directory.is_symlink() or not directory.is_dir():
+                raise PackageError(f"Missing or unsafe interface directory: {directory}")
+            destination = package / "Interface" / name / str(relative)
+            for path in sorted(directory.rglob("*")):
+                if path.is_symlink() or (not path.is_dir() and not path.is_file()):
+                    raise PackageError(f"Unsafe interface file: {path}")
+                if path.is_file():
+                    if path.suffix.casefold() in {".dll", ".dylib", ".so", ".exe", ".civ5pkg"}:
+                        raise PackageError(f"Unexpected executable or nested package in interface: {path}")
+                    out = destination / path.relative_to(directory)
+                    out.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copyfile(path, out)
+                    files[str(path.relative_to(source))] = sha256(path)
+            directories.append(str(relative))
+            ET.SubElement(target, "Directory").text = f"Interface/{name}/{relative}"
+        result.append({"directory": name, "manifest_sha256": sha256(manifest),
+                       "directories": directories, "source_files": files})
+    return result
+
+
 def register_addins(addins, package):
     for addin in addins:
         target = package / "UI" / addin["consumer"]
@@ -261,10 +307,12 @@ def register_addins(addins, package):
                 f.write('\n' + line + '\n')
 
 
-def mod_layers(upstream, include_vp):
+def mod_layers(upstream, include_vp, include_eui=False):
     names = [("(1) Community Patch", "d1b6328c-ff44-4b0d-aad7-c657f83610cd")]
     if include_vp:
         names.append(("(2) Vox Populi", "8411a7a8-dad3-4622-a18e-fcc18324c799"))
+    if include_eui:
+        names.append(("(3a) VP - EUI Compatibility Files", "24923240-e4fb-4bf6-8f0e-6e5b6cf4d3c2"))
     layers, versions = [], {}
     for name, expected in names:
         directory = upstream / name
@@ -330,19 +378,21 @@ def dump_database(db, destination, skipped_tables, skipped_schemas, language=Fal
     return count
 
 
-def build(upstream, app, cache, core, output, include_runtime=False, include_vp=False):
+def build(upstream, app, cache, core, output, include_runtime=False, include_vp=False, include_eui=False):
     with closing(sqlite3.connect(":memory:")) as db:
-        return _build(upstream, app, cache, core, output, include_runtime, include_vp, db)
+        return _build(upstream, app, cache, core, output, include_runtime, include_vp, include_eui, db)
 
 
-def _build(upstream, app, cache, core, output, include_runtime, include_vp, db):
+def _build(upstream, app, cache, core, output, include_runtime, include_vp, include_eui, db):
     if output.exists():
         raise PackageError(f"Output already exists; choose a new build directory: {output}")
     if output.resolve().is_relative_to(upstream.resolve()) or output.resolve().is_relative_to(app.resolve()):
         raise PackageError("Package output must be outside the game and upstream checkout")
     if include_vp and not include_runtime:
         raise PackageError("Vox Populi packaging requires --runtime-assets")
-    layers = mod_layers(upstream, include_vp)
+    if include_eui and not include_vp:
+        raise PackageError("EUI packaging requires --vox-populi and --runtime-assets")
+    layers = mod_layers(upstream, include_vp, include_eui)
     actions = [(directory, action) for directory, mod, _ in layers
                for action in mod.findall("./Actions/OnModActivated/UpdateDatabase")]
     stock = cache / "Civ5DebugDatabase.db"
@@ -405,6 +455,12 @@ def _build(upstream, app, cache, core, output, include_runtime, include_vp, db):
         except (sqlite3.Error, ET.ParseError, PackageError) as e:
             raise PackageError(f"{name}: {e}") from e
         applied.append({"mod": mod_dir.name, "file": name, "sha256": sha256(path)})
+    if include_eui:
+        tips = upstream / "VPUI Text/VPUI_tips_en_us.xml"
+        if tips.is_symlink() or not tips.is_file():
+            raise PackageError(f"Missing or unsafe VPUI text: {tips}")
+        apply_xml(db, xml(tips))
+        applied.append({"mod": "VPUI Text", "file": tips.name, "sha256": sha256(tips)})
     if db.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
         raise PackageError("Generated database failed integrity_check")
     maker = (upstream / "(5) Modpack Maker for VP/ModpackMaker.lua").read_text()
@@ -427,6 +483,7 @@ def _build(upstream, app, cache, core, output, include_runtime, include_vp, db):
         for key in ["Name", "Description"]:
             ET.SubElement(ET.SubElement(pkg, key), "Value", language="en_US").text = "VP Mac Vox Populi data" if include_vp else "VP Mac CP startup data"
         skin = ET.SubElement(pkg, "UISkin", name="Expansion2Primary", set="Expansion2", platform="Common")
+        interface = interface_skin(upstream, package, skin) if include_eui else None
         gameplay = ET.SubElement(skin, "GameplaySkin")
         for directory in ["Mods", "UI"]:
             ET.SubElement(gameplay, "Directory").text = directory
@@ -435,7 +492,8 @@ def _build(upstream, app, cache, core, output, include_runtime, include_vp, db):
         if include_runtime:
             if include_vp:
                 parts = [runtime_files(directory, mod, maker, package,
-                                       folder=f"{i:02d}_{directory.name}", register=False)
+                                       folder=f"{i:02d}_{directory.name}", register=False,
+                                       exclude_lua=include_eui and i <= 2)
                          for i, (directory, mod, _) in enumerate(layers, 1)]
                 addins = [a for part in parts for a in part["addins"]]
                 register_addins(addins, package)
@@ -451,6 +509,7 @@ def _build(upstream, app, cache, core, output, include_runtime, include_vp, db):
                   "native_core_sha256": sha256(core), "stock_database_sha256": sha256(stock),
                   "localization_sha256": sha256(localized), "actions": applied, "repairs": corrections,
                   "content": "vox-populi" if include_vp else "community-patch",
+                  "interface": "eui" if include_eui else "standard", "interface_assets": interface,
                   "mods": [{"directory": directory.name, "id": mod.get("id"), "version": mod.get("version"),
                             "manifest_sha256": sha256(manifest)} for directory, mod, manifest in layers],
                   "gameplay_tables": table_count, "overridden_xml_files": len(overridden),
@@ -473,10 +532,12 @@ def main():
                         help="Include manifest-declared CP UI/Lua/assets for packaging validation; gameplay remains unvalidated")
     parser.add_argument("--vox-populi", action="store_true",
                         help="Add the upstream Vox Populi balance/UI layer after CP; requires --runtime-assets")
+    parser.add_argument("--eui", action="store_true",
+                        help="Include the pinned EUI/VPUI skins and VP EUI compatibility layer; requires --vox-populi")
     args = parser.parse_args()
     try:
         report = build(*(getattr(args, k).resolve() for k in ["upstream", "app", "cache", "core", "output"]),
-                       include_runtime=args.runtime_assets, include_vp=args.vox_populi)
+                       include_runtime=args.runtime_assets, include_vp=args.vox_populi, include_eui=args.eui)
     except (OSError, ValueError, sqlite3.Error, PackageError) as e:
         parser.exit(1, f"Error: {e}\n")
     print(json.dumps({k: v for k, v in report.items() if k not in {"files", "actions", "runtime_assets"}}, indent=2))

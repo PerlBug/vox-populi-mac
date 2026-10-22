@@ -2,7 +2,7 @@
 
 Play Vox Populi on the **Steam macOS version of Civilization V: Brave New World**, including Apple Silicon Macs running the game through Rosetta.
 
-Vox Populi improves Civ V's AI and expands its gameplay. This unofficial Mac port runs the upstream Community Patch game core natively in the Mac game process and includes the full Vox Populi balance changes, interface and assets. **EUI is not included.** It is an early beta for single-player testing.
+Vox Populi improves Civ V's AI and expands its gameplay. This unofficial Mac port runs the upstream Community Patch game core natively in the Mac game process and includes the full Vox Populi balance changes, interface and assets. **Optional Enhanced User Interface (EUI) is included in the installer.** It is an early beta for single-player testing; EUI needs in-game testing on Mac.
 
 The Mac compatibility code lives separately from the [upstream Vox Populi project](https://github.com/LoneGazebo/Community-Patch-DLL). This repository pins an untouched upstream checkout instead of maintaining a separate gameplay fork.
 
@@ -19,13 +19,23 @@ The graphical beta is the **complete `-macOS.zip` release**, not GitHub's automa
 
 ## Install
 
-1. Extract `Vox-Populi-Mac-0.1.0-beta.3-macOS.zip` and keep **Vox Populi Mac Installer.app** in Documents or Applications.
+1. Extract `Vox-Populi-Mac-0.1.0-beta.4-macOS.zip` and keep **Vox Populi Mac Installer.app** in Documents or Applications.
 2. Double-click the app. It finds the default Steam installation. If Steam uses another library, click **Choose Game…** and select `Civilization V.app`.
-3. Click **Check Compatibility**. The app checks the game build, matching beta files, open game processes, working cache and detected conflicts without installing anything.
+3. Leave **Enhanced User Interface (EUI)** unchecked for the standard interface, or check it to install the bundled VP-compatible EUI. Click **Check Compatibility** to check your selection without changing files.
 4. Click **Install Beta** and wait for **Vox Populi is installed**. No administrator password is requested; the app needs normal write access to your game and user-data folders.
 5. Launch Civ V through Steam with BNW enabled. Choose **regular Single Player → Set Up Game** and start a **new game**. The package loads automatically; there is no Mods-menu activation step.
 
 This community beta is **ad hoc signed, not Apple-notarized**. macOS may block a downloaded copy. For an app you trust, Apple's per-app **System Settings → Privacy & Security → Open Anyway** flow may be available after the first launch attempt. See [Apple's instructions](https://support.apple.com/en-au/102445).
+
+## Choosing EUI or changing an existing beta
+
+EUI changes the city screen, unit panel, tooltips, top bar and other interface screens. The installer includes the EUI version and VP compatibility files from the same pinned upstream revision as the game data. You do not need a separate EUI download or MODS-folder activation.
+
+If a beta is already installed, quit the game and click **Uninstall / Restore** first. Then select or clear **Enhanced User Interface (EUI)** and install again. The installer shows which interface is installed and locks the checkbox until restoration. Start a **new game** after switching; cross-interface saves are untested. Your previous beta saves are archived during restoration.
+
+Move any separately installed `UI_bc1` or `VPUI` folders completely outside the game's DLC folder before using either option. The installer refuses those copies, including recognized renamed packages, and leaves them intact. Its bundled EUI is managed inside the VP data package and removed by **Uninstall / Restore**.
+
+To test EUI, start a new regular Single Player game, found a city, choose production and research, inspect unit actions and plot tooltips, and open the city and policy screens. Play a few turns, save, quit, relaunch, reload and finish another turn. Report missing controls, blank panels or Lua errors using **Diagnostics → Copy Details**, and mention that EUI was selected. Startup checks alone do not verify the interface.
 
 ## Why the MODS folder is not supported
 
@@ -52,7 +62,8 @@ For beta 0.1, use **this package on its own**, with the official DLC.
 | Other content | Beta 0.1 guidance |
 | --- | --- |
 | Another Community Patch, Vox Populi or VP modpack | Conflicts with the included core and data. Remove/restore it first. The installer refuses detected VP modpacks. |
-| EUI / `UI_bc1` | Conflicts with this beta's interface. Move the EUI folder completely outside the game's DLC folder before installing. The player installer refuses a detected `UI_bc1` folder. Renaming it inside DLC is not sufficient. |
+| EUI bundled with this installer | Supported as an optional, experimental interface. Select the EUI checkbox before installation. It is restored together with VP. |
+| Separate EUI / `UI_bc1` or `VPUI` | Conflicts with the managed interface. Move these folders completely outside DLC for either installation option. Renaming a recognized package inside DLC is not sufficient. |
 | Another replacement game core or DLL mod | Cannot share the same core. Restore the original installation before switching. Windows DLLs do not run in the Mac game. |
 | UI, balance, civilization or other gameplay mods | Compatibility is untested. They may replace the same screens or database entries. Leave them disabled; adding one to the MODS folder does not integrate it into this VP package. |
 | Mods merely stored in MODS | These are not activated by regular Single Player. Do not select/activate additional mods for this beta. |
@@ -74,6 +85,7 @@ This restores the verified original core, original cache and original saves, and
 - With Community Patch data, a new city, a full turn, saving, relaunching, reloading and another turn worked with normal map/city screens.
 - With full VP data, the first session passed those bridge checks, recorded save writes and shut down normally. A separate full-VP reload was not repeated for this beta; it is assumed from the preceding core test.
 - Automated loader, rollback, ABI, upstream-contract and packaging checks pass.
+- EUI is packaged from the pinned upstream skins and compatibility manifest. Its Mac gameplay/UI validation is pending; the previous gameplay results used the standard interface.
 
 Long campaigns, later eras, all UI screens and all gameplay systems have **not** been validated. The beta uses the tested Debug build, so performance is not representative of a future optimized release. The database snapshot does not preserve CP's custom query indexes or SQL triggers; VP's final triggers primarily support additional mods. Two duplicate strategic-view art warnings remain under review. See the [release notes](CHANGELOG.md).
 
@@ -87,7 +99,7 @@ Logs are under `~/Library/Application Support/Sid Meier's Civilization 5/Logs/`.
 
 ### Optional command-line tools
 
-The separate command-line beta ZIP and source builds still support `python3 vp-mac.py install`, `status`, `report` and `uninstall`, with `--app "/path/to/Civilization V.app"` for another Steam library. These direct commands require Python 3.11+. The GUI uses the same backend with its bundled runtime.
+The separate command-line beta ZIP and source builds support `python3 vp-mac.py install` for standard VP, `python3 vp-mac.py install --eui` for bundled EUI, and `status`, `report` and `uninstall`. Add `--app "/path/to/Civilization V.app"` for another Steam library, or `--dry-run` to check installation/removal. Restore before switching interfaces. These direct commands require Python 3.11+. The GUI uses the same backend with its bundled runtime.
 
 ## Development and credits
 

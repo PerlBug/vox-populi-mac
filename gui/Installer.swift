@@ -10,6 +10,7 @@ final class Installer: NSObject, NSApplicationDelegate, NSWindowDelegate {
     let details = NSTextView()
     let scroll = NSScrollView()
     let disclosure = NSButton(checkboxWithTitle: "Show technical details", target: nil, action: nil)
+    let eui = NSButton(checkboxWithTitle: "Enhanced User Interface (EUI)", target: nil, action: nil)
     var installButton: NSButton!
     var uninstallButton: NSButton!
     var checkButton: NSButton!
@@ -89,7 +90,7 @@ final class Installer: NSObject, NSApplicationDelegate, NSWindowDelegate {
         edit.submenu!.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
         menu.addItem(edit)
         NSApp.mainMenu = menu
-        window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 820, height: 690),
+        window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 820, height: 720),
                           styleMask: [.titled, .closable, .miniaturizable], backing: .buffered, defer: false)
         window.title = "Vox Populi Mac Installer"
         window.delegate = self
@@ -97,13 +98,17 @@ final class Installer: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let version = (try? String(contentsOf: distribution.appendingPathComponent("VERSION"), encoding: .utf8))?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "Beta 0.1"
         let title = label("Vox Populi for Mac", size: 28)
         title.font = .systemFont(ofSize: 28, weight: .semibold)
-        let subtitle = label("\(version)  ·  Single player  ·  Without EUI", secondary: true)
+        let subtitle = label("\(version)  ·  Single player  ·  Optional EUI", secondary: true)
         let globe = NSImageView(image: NSImage(systemSymbolName: "globe", accessibilityDescription: nil)!)
         globe.contentTintColor = .systemIndigo
         globe.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 42, weight: .regular)
         globe.widthAnchor.constraint(equalToConstant: 52).isActive = true
         let header = stack([globe, stack([title, subtitle], spacing: 4)], vertical: false, spacing: 16)
         let introduction = label("Install Vox Populi’s AI, balance changes and interface for Civilization V: Brave New World.")
+        eui.target = self
+        eui.action = #selector(interfaceChanged)
+        eui.state = CommandLine.arguments.contains("--eui") ? .on : .off
+        let interfaceChoice = stack([eui, label("Bundled VP-compatible version · Experimental", size: 12, secondary: true)], vertical: false, spacing: 12)
 
         chooseButton = button("Choose Game…", #selector(chooseGame))
         pathLabel.font = .systemFont(ofSize: 12)
@@ -132,7 +137,7 @@ final class Installer: NSObject, NSApplicationDelegate, NSWindowDelegate {
         uninstallButton = button("Uninstall / Restore", #selector(uninstallBeta))
         let actions = stack([installButton, checkButton, uninstallButton], vertical: false, spacing: 10)
 
-        let notice = label("Before installing: quit Civ V and its launcher, use the official DLC, and remove EUI or other VP modpacks. Your normal saves are set aside and returned when you uninstall.", secondary: true)
+        let notice = label("Before installing: quit Civ V and its launcher. Move separate EUI / VPUI copies and other VP modpacks outside DLC. To change interfaces, Uninstall / Restore first. Your normal saves return when you uninstall.", secondary: true)
         let mods = label("Why not the MODS folder? Mac Civ V has its own game core, but cannot load Vox Populi’s Windows DLL. This installer replaces the core with a native Mac VP version and installs its matching startup data, with backups. VP stays active until you uninstall.", secondary: true)
         notice.preferredMaxLayoutWidth = 760
         mods.preferredMaxLayoutWidth = 760
@@ -154,7 +159,7 @@ final class Installer: NSObject, NSApplicationDelegate, NSWindowDelegate {
         scroll.isHidden = true
         scroll.heightAnchor.constraint(equalToConstant: 150).isActive = true
 
-        let content = stack([header, introduction, gameCard, stateCard, actions, notice, mods, support, disclosure, scroll], spacing: 17)
+        let content = stack([header, introduction, gameCard, interfaceChoice, stateCard, actions, notice, mods, support, disclosure, scroll], spacing: 15)
         content.translatesAutoresizingMaskIntoConstraints = false
         window.contentView!.addSubview(content)
         NSLayoutConstraint.activate([
@@ -175,6 +180,7 @@ final class Installer: NSObject, NSApplicationDelegate, NSWindowDelegate {
             render(to: directory)
             perform("install", dryRun: true) { code, _ in
                 let result: [String: Any] = ["preflightExitCode": code, "installEnabled": self.installButton.isEnabled,
+                                            "euiSelected": self.eui.state == .on, "euiEnabled": self.eui.isEnabled,
                                             "uninstallEnabled": self.uninstallButton.isEnabled,
                                             "title": self.stateTitle.stringValue, "detail": self.stateDetail.stringValue]
                 if let data = try? JSONSerialization.data(withJSONObject: result, options: [.prettyPrinted, .sortedKeys]) {
@@ -194,6 +200,7 @@ final class Installer: NSObject, NSApplicationDelegate, NSWindowDelegate {
         [installButton, uninstallButton, checkButton, chooseButton, reportButton, copyButton].forEach { $0?.isEnabled = !busy }
         installButton.isEnabled = !busy && !installed
         checkButton.isEnabled = !busy && !installed
+        eui.isEnabled = !busy && !installed
         if busy { indicator.startAnimation(nil) } else { indicator.stopAnimation(nil) }
     }
 
@@ -203,10 +210,11 @@ final class Installer: NSObject, NSApplicationDelegate, NSWindowDelegate {
         stateTitle.stringValue = dryRun ? "Checking compatibility…" : ["install": "Installing Vox Populi…", "uninstall": "Restoring your original game…", "status": "Checking your installation…", "report": "Collecting diagnostics…"][command]!
         stateDetail.stringValue = "Please keep this window open."
         let interpreter = python, cli = distribution.appendingPathComponent("vp-mac.py"), selectedGame = game
+        let useEUI = command == "install" && eui.state == .on
         DispatchQueue.global(qos: .userInitiated).async {
             let process = Process(), pipe = Pipe()
             process.executableURL = interpreter
-            process.arguments = ["-I", "-B", cli.path, command, "--app", selectedGame.path] + (dryRun ? ["--dry-run"] : [])
+            process.arguments = ["-I", "-B", cli.path, command, "--app", selectedGame.path] + (useEUI ? ["--eui"] : []) + (dryRun ? ["--dry-run"] : [])
             var environment = ProcessInfo.processInfo.environment
             for key in ["PYTHONHOME", "PYTHONPATH", "VIRTUAL_ENV", "DYLD_LIBRARY_PATH", "DYLD_INSERT_LIBRARIES"] { environment.removeValue(forKey: key) }
             environment["PYTHONDONTWRITEBYTECODE"] = "1"
@@ -237,11 +245,11 @@ final class Installer: NSObject, NSApplicationDelegate, NSWindowDelegate {
     func succeeded(_ command: String, dryRun: Bool, output: String) {
         if dryRun {
             stateTitle.stringValue = "Ready to install"
-            stateDetail.stringValue = "Your game build and beta files match. The installer will preserve your original core, cache and saves."
+            stateDetail.stringValue = "\(eui.state == .on ? "VP with EUI" : "Standard VP") is ready. The installer will preserve your original core, cache and saves."
         } else if command == "install" {
             installed = true
             stateTitle.stringValue = "Vox Populi is installed"
-            stateDetail.stringValue = "Launch from Steam and start a NEW regular Single Player game. VP stays active until you uninstall."
+            stateDetail.stringValue = "\(eui.state == .on ? "VP with EUI" : "Standard VP") is active. Launch from Steam and start a NEW regular Single Player game."
         } else if command == "uninstall" {
             installed = false
             let unchanged = output.contains("No managed probe is installed")
@@ -251,8 +259,9 @@ final class Installer: NSObject, NSApplicationDelegate, NSWindowDelegate {
             if command == "status" {
                 let state = json["state"] as? String ?? "unknown"
                 installed = state == "installed"
+                if installed { eui.state = json["interface"] as? String == "eui" ? .on : .off }
                 stateTitle.stringValue = installed ? "Vox Populi is installed" : state == "stock" ? "Original Civ V is installed" : "An existing installation needs attention"
-                stateDetail.stringValue = installed ? "Play through regular Single Player, or restore the original game below." : state == "stock" ? "Choose Check Compatibility or Install Beta. Close Civ V and its launcher first." : "Keep the backups. Uninstall / Restore will check them before changing anything."
+                stateDetail.stringValue = installed ? "\(eui.state == .on ? "VP with EUI" : "Standard VP") is active. To change interfaces, Uninstall / Restore first." : state == "stock" ? "Choose your interface, then Check Compatibility or Install Beta. Close Civ V first." : "Keep the backups. Uninstall / Restore will check them before changing anything."
             } else {
                 stateTitle.stringValue = "Diagnostics collected"
                 stateDetail.stringValue = "Open or copy Details when reporting a problem. Last startup result: \(json["startup_result"] as? String ?? "not available")."
@@ -268,7 +277,8 @@ final class Installer: NSObject, NSApplicationDelegate, NSWindowDelegate {
         if !FileManager.default.fileExists(atPath: python.path) { title = "Installer files are missing"; detail = "Extract the complete macOS ZIP and open the app again. Keep the app bundle intact." }
         else if !FileManager.default.fileExists(atPath: game.appendingPathComponent("Contents/MacOS/Civilization V").path) { title = "Choose your Civilization V app"; detail = "Click Choose Game and select Civilization V.app in your Steam library. In Steam, Installed Files → Browse opens the game's folder." }
         else if output.contains("Quit Civ V") { title = "Close Civ V first"; detail = "Quit both Civilization V and its launcher, then try again. Steam can stay open." }
-        else if output.contains("EUI conflicts") || output.contains("existing VP_MODPACK") || output.contains("existing package uses") { title = "Another mod conflicts with this beta"; detail = "Move EUI or the other VP modpack completely outside the game's DLC folder. This installer does not delete other mods." }
+        else if output.contains("Separate EUI / VPUI") || output.contains("existing VP_MODPACK") || output.contains("existing package uses") { title = "Another mod conflicts with this beta"; detail = "Move separate EUI / VPUI copies or the other VP modpack completely outside DLC. Select EUI here to install the bundled matching version." }
+        else if output.contains("Restore the previous") || output.contains("Restore it before installing") { title = "Restore the installed beta first"; detail = "Click Uninstall / Restore, then choose your interface and install. Beta saves are preserved separately. Start a new game after switching interfaces." }
         else if output.contains("reviewed SHA-256") { title = "This game build is not supported"; detail = "Beta 0.1 requires Steam's Mac Aspyr 1.4.2 (180925) build. Your game files were not replaced." }
         else if output.contains("localization cache") || output.contains("Localization-Merged.db") { title = "Run normal Brave New World once"; detail = "Restore any existing beta, launch unmodified BNW, reach the menu and quit. Then try installing again." }
         else if output.contains("Permission denied") || output.contains("Operation not permitted") { title = "macOS blocked file access"; detail = "Use Choose Game to select the app again. Check the exact blocked path in Details before changing permissions." }
@@ -296,6 +306,10 @@ final class Installer: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
     }
     @objc func installBeta() { perform("install") }
+    @objc func interfaceChanged() {
+        stateTitle.stringValue = eui.state == .on ? "EUI selected" : "Standard interface selected"
+        stateDetail.stringValue = "Click Check Compatibility to check this selection. EUI includes the matching VP compatibility files."
+    }
     @objc func uninstallBeta() { perform("uninstall") }
     @objc func checkCompatibility() { perform("install", dryRun: true) }
     @objc func refresh() { perform("status") }
@@ -305,7 +319,7 @@ final class Installer: NSObject, NSApplicationDelegate, NSWindowDelegate {
     @objc func toggleDetails() {
         scroll.isHidden = disclosure.state != .on
         let available = NSScreen.main?.visibleFrame.height ?? 1000
-        window.setContentSize(NSSize(width: 820, height: min(scroll.isHidden ? 690 : 855, available - 60)))
+        window.setContentSize(NSSize(width: 820, height: min(scroll.isHidden ? 720 : 885, available - 60)))
     }
 
     func windowShouldClose(_ sender: NSWindow) -> Bool { !isBusy }

@@ -34,25 +34,27 @@ class BetaTests(unittest.TestCase):
         self.root = Path(self.temp.name)
         self.app = self.root / "Steam Library/Civilization V.app"
 
-    def payload(self, packaged=True):
+    def payload(self, packaged=True, eui=False):
+        name = "VP_MAC_VP_EUI" if eui else "VP_MAC_VP"
         if packaged:
             core = self.root / "payload" / player.CORE
-            package = self.root / "payload/VP_MAC_VP"
+            package = self.root / "payload" / name
         else:
             core = self.root / "prototype/build-core/macos" / player.CORE
-            package = self.root / "prototype/build-core/VP_MAC_VP-gameplay-probe"
+            package = self.root / "prototype/build-core" / (name + "-gameplay-probe")
         core.parent.mkdir(parents=True, exist_ok=True)
         core.write_bytes(b"fixture core")
         package.mkdir(parents=True)
         (package / "example.xml").write_text("<GameData/>")
         metadata = {"content": "vox-populi", "gameplay_test_ready": True,
+                    "interface": "eui" if eui else "standard",
                     "native_core_sha256": hashlib.sha256(core.read_bytes()).hexdigest(),
                     "files": release.inventory(package)}
         (package / "vp-mac-package.json").write_text(json.dumps(metadata))
         return core, package
 
-    def args(self, command, dry_run=False):
-        return argparse.Namespace(command=command, app=self.app, dry_run=dry_run)
+    def args(self, command, dry_run=False, eui=False):
+        return argparse.Namespace(command=command, app=self.app, dry_run=dry_run, eui=eui)
 
     def test_player_uses_release_payload_with_literal_space_paths(self):
         core, package = self.payload()
@@ -79,14 +81,27 @@ class BetaTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "full Vox Populi"):
             player.install_payload(self.root)
 
-    def test_player_refuses_nested_eui_without_changing_it(self):
+    def test_player_selects_separate_eui_package_and_refuses_mislabeled_payload(self):
         self.payload()
-        eui = self.app / "Contents/Assets/Assets/DLC/custom/UI_Bc1"
-        eui.mkdir(parents=True)
-        (eui / "keep.lua").write_text("original")
-        with self.assertRaisesRegex(ValueError, "EUI conflicts"):
-            player.command_for(self.args("install"), self.root)
-        self.assertEqual((eui / "keep.lua").read_text(), "original")
+        with self.assertRaisesRegex(ValueError, "complete beta archive"):
+            player.command_for(self.args("install", eui=True), self.root)
+        core, package = self.payload(eui=True)
+        command = player.command_for(self.args("install", dry_run=True, eui=True), self.root)
+        self.assertEqual(command[command.index("--data-package") + 1], str(package))
+        self.assertEqual(command[command.index("--native-core") + 1], str(core))
+        path = package / "vp-mac-package.json"
+        data = json.loads(path.read_text())
+        data["interface"] = "standard"
+        path.write_text(json.dumps(data))
+        with self.assertRaisesRegex(ValueError, "selected interface"):
+            player.command_for(self.args("install", eui=True), self.root)
+
+    def test_eui_source_selection_and_install_only_flag(self):
+        core, package = self.payload(packaged=False, eui=True)
+        self.assertEqual(player.install_payload(self.root, True), (core, package))
+        for command in ["uninstall", "status", "report"]:
+            with self.assertRaisesRegex(ValueError, "available for install"):
+                player.command_for(self.args(command, eui=True), self.root)
 
     def test_player_recovery_commands_do_not_require_payload_or_clear_eui(self):
         eui = self.app / "Contents/Assets/Assets/DLC/UI_bc1"

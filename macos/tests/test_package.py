@@ -297,6 +297,76 @@ class PackageTests(unittest.TestCase):
             pack.build(*args, output, include_runtime=True, include_vp=True)
         self.assertFalse(output.exists())
 
+    def eui_fixture(self):
+        args = self.vp_fixture()
+        for name in ["(1) Community Patch", "(2) Vox Populi"]:
+            mod = args[0] / name
+            tree = ET.parse(next(mod.glob("*.modinfo")))
+            (mod / "LUA").mkdir()
+            (mod / "LUA/UnitPanel.lua").write_text("-- standard UI must not load with EUI")
+            ET.SubElement(tree.find("./Files"), "File", {"import": "1"}).text = "LUA/UnitPanel.lua"
+            tree.write(next(mod.glob("*.modinfo")))
+        compat = args[0] / "(3a) VP - EUI Compatibility Files"
+        compat.mkdir()
+        (compat / "EUI.modinfo").write_text('''<Mod id="24923240-e4fb-4bf6-8f0e-6e5b6cf4d3c2" version="1">
+          <Dependencies><Mod id="8411a7a8-dad3-4622-a18e-fcc18324c799" minversion="17"/></Dependencies>
+          <Actions><OnModActivated><UpdateDatabase>text.xml</UpdateDatabase></OnModActivated></Actions>
+          <Files><File import="1">LUA/UnitPanel.lua</File><File import="1">LUA/InGame.lua</File></Files></Mod>''')
+        (compat / "text.xml").write_text('<GameData><Language_en_US><Replace Tag="TAG" Text="EUI"/></Language_en_US></GameData>')
+        (compat / "LUA").mkdir()
+        (compat / "LUA/UnitPanel.lua").write_text("-- EUI compatibility panel")
+        (compat / "LUA/InGame.lua").write_text("local g_uiAddins = {}; -- EUI consumer\n")
+        for name, manifest in [("UI_bc1", "EUI_2.Civ5Pkg"), ("VPUI", "VPUI_2.Civ5Pkg")]:
+            directory = args[0] / name
+            (directory / "Core").mkdir(parents=True)
+            (directory / "Core" / (name + ".xml")).write_text("<Context/>")
+            (directory / manifest).write_text('''<Civ5Package>
+              <UISkin name="Expansion2Primary" set="Expansion2" platform="Common">
+              <Skin><Directory>Core</Directory></Skin></UISkin></Civ5Package>''')
+        (args[0] / "VPUI Text").mkdir()
+        (args[0] / "VPUI Text/VPUI_tips_en_us.xml").write_text('<GameData><Language_en_US><Replace Tag="TIP" Text="VP tip"/></Language_en_US></GameData>')
+        return args
+
+    def test_eui_build_loads_compatibility_last_and_excludes_standard_lua(self):
+        args = self.eui_fixture()
+        before = {p: pack.sha256(p) for p in args[0].rglob("*") if p.is_file()}
+        output = self.root / "eui-package"
+        with mock.patch.object(pack.subprocess, "check_output", return_value="test-commit\n"):
+            report = pack.build(*args, output, include_runtime=True, include_vp=True, include_eui=True)
+        self.assertEqual(report["interface"], "eui")
+        self.assertEqual(report["mods"][-1]["directory"], "(3a) VP - EUI Compatibility Files")
+        for name in ["01_(1) Community Patch", "02_(2) Vox Populi"]:
+            self.assertFalse((output / "Mods" / name / "LUA").exists())
+        self.assertEqual((output / "Mods/03_(3a) VP - EUI Compatibility Files/LUA/UnitPanel.lua").read_text(), "-- EUI compatibility panel")
+        consumer = (output / "UI/InGame.lua").read_text()
+        self.assertIn("EUI consumer", consumer)
+        for context in ["Panel", "Logic", "Balance"]:
+            self.assertIn(f'g_uiAddins[#g_uiAddins + 1] = "{context}";', consumer)
+        skin = pack.xml(output / "VPMac.Civ5Pkg").find("UISkin")
+        self.assertEqual([n.text for n in skin.findall("./Skin/Directory")], ["Interface/UI_bc1/Core", "Interface/VPUI/Core"])
+        self.assertEqual([n.text for n in skin.findall("./GameplaySkin/Directory")], ["Mods", "UI"])
+        self.assertEqual(list(output.rglob("*.Civ5Pkg")), [output / "VPMac.Civ5Pkg"])
+        text = pack.xml(output / "Override/CIV5Units_Mongol.xml")
+        values = {n.findtext("Tag"): n.findtext("Text") for n in text.findall("./Language_en_US/Row")}
+        self.assertEqual(values, {"TAG": "EUI", "TIP": "VP tip"})
+        self.assertEqual({p: pack.sha256(p) for p in before}, before)
+        for name, sha in report["files"].items():
+            self.assertEqual(pack.sha256(output / name), sha)
+
+    def test_eui_requires_full_vp_and_refuses_unsafe_skin_or_changed_contract(self):
+        args = self.eui_fixture()
+        output = self.root / "rejected"
+        with self.assertRaisesRegex(pack.PackageError, "requires --vox-populi"):
+            pack.build(*args, output, include_runtime=True, include_eui=True)
+        manifest = args[0] / "UI_bc1/EUI_2.Civ5Pkg"
+        original = manifest.read_text()
+        for changed, error in [(original.replace("Core</", "../outside</"), "Unsafe interface directory"),
+                               (original.replace("<Skin>", "<GameplaySkin>").replace("</Skin>", "</GameplaySkin>"), "Unsupported interface directory")]:
+            manifest.write_text(changed)
+            with self.assertRaisesRegex(pack.PackageError, error):
+                pack.build(*args, output, include_runtime=True, include_vp=True, include_eui=True)
+            self.assertFalse(output.exists())
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

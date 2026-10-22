@@ -279,6 +279,49 @@ class NativeDataTests(Fixture):
         self.assertFalse(self.target.exists())
         self.assertEqual(self.core.read_bytes(), self.original)
 
+    def test_separate_eui_and_vpui_are_preserved_and_refused_for_both_interfaces(self):
+        dlc = self.target.parent
+        for name in ["custom/UI_Bc1", "VPUI"]:
+            directory = dlc / name
+            directory.mkdir(parents=True)
+            keep = directory / "keep.lua"
+            keep.write_text("existing UI")
+            for interface in ["standard", "eui"]:
+                path = self.package / manage.DATA_MANIFEST
+                metadata = json.loads(path.read_text())
+                metadata["interface"] = interface
+                path.write_text(json.dumps(metadata))
+                with self.assertRaisesRegex(manage.ProbeError, "Separate EUI / VPUI"):
+                    manage.prepare_native_data(self.app, self.package, self.user_data, ARGS.wrapper)
+                self.assertEqual(keep.read_text(), "existing UI")
+                self.assertEqual(self.core.read_bytes(), self.original)
+                self.assertFalse(self.backup.exists())
+            shutil.rmtree(directory)
+
+    def test_renamed_standalone_eui_package_is_refused(self):
+        path = self.target.parent / "renamed-interface.civ5pkg"
+        path.write_text("<Civ5Package><GUID>{570F793E-FC33-417F-AE19-7CECCCDD5F85}</GUID></Civ5Package>")
+        with self.assertRaisesRegex(manage.ProbeError, "Separate EUI / VPUI package"):
+            manage.prepare_native_data(self.app, self.package, self.user_data, ARGS.wrapper)
+        self.assertTrue(path.exists())
+
+    def test_embedded_eui_uses_verified_transaction_and_is_removed_on_restore(self):
+        panel = self.package / "Interface/UI_bc1/Core/EUI_context.lua"
+        panel.parent.mkdir(parents=True)
+        panel.write_text("-- bundled EUI")
+        path = self.package / manage.DATA_MANIFEST
+        metadata = json.loads(path.read_text())
+        metadata["interface"] = "eui"
+        metadata["files"] = {name: sha for name, sha in manage.tree_hashes(self.package).items() if name != manage.DATA_MANIFEST}
+        path.write_text(json.dumps(metadata))
+        self.plan = manage.prepare_native_data(self.app, self.package, self.user_data, ARGS.wrapper)
+        self.install()
+        self.assertEqual(manage.load_manifest(self.manifest)["native_data"]["interface"], "eui")
+        self.assertEqual((self.target / panel.relative_to(self.package)).read_text(), "-- bundled EUI")
+        manage.restore(self.app)
+        self.assertFalse(self.target.exists())
+        self.assertEqual(self.core.read_bytes(), self.original)
+
     def enable_gameplay_probe(self, existing=True):
         if existing:
             saves = self.user_data / "Saves/single"

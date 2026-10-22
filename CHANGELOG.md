@@ -1,5 +1,13 @@
 # Release notes
 
+## 0.1.0-beta.4 — optional EUI
+
+- Adds an optional Enhanced User Interface checkbox to the Mac installer, with standard VP selected by default. Shows the installed interface and requires restoration before switching.
+- Builds EUI from the same pinned 5.4.8 upstream revision: BNW EUI/VPUI skins, the `(3a)` compatibility layer and its database/text actions. Excludes the CP/VP `LUA` directories as required by upstream's EUI installation layout; retains core overrides and addins.
+- Embeds EUI inside the existing managed data package. Installation, interrupted-install recovery and removal use the same verified core/cache/save transaction. Separate EUI/VPUI copies are refused and preserved, including recognized renamed packages.
+- Bundles both interface choices in the app; adds `vp-mac.py install --eui` and reproducible EUI packaging instructions.
+- Native core, upstream sources and Mac save format are unchanged. Standard VP's payload is retained. EUI in-game validation on Mac is pending; start a new game when switching interfaces.
+
 ## 0.1.0-beta.3 — clearer installation explanation
 
 - Explains directly in the installer that Mac Civ V already has a game core, but cannot load VP's Windows DLL from MODS. The installer replaces that core with the native Mac VP version and installs its matching startup data, with backups.

@@ -15,33 +15,30 @@ DEFAULT_APP = Path.home() / "Library/Application Support/Steam/steamapps/common/
 CORE = "libCvGameCoreDLL_Expansion2_DLL.dylib"
 
 
-def install_payload(root):
+def install_payload(root, eui=False):
+    name = "VP_MAC_VP_EUI" if eui else "VP_MAC_VP"
     if (root / "payload").is_dir():
-        core, package = root / "payload" / CORE, root / "payload/VP_MAC_VP"
+        core, package = root / "payload" / CORE, root / "payload" / name
     else:
         core = root / "prototype/build-core/macos" / CORE
-        package = root / "prototype/build-core/VP_MAC_VP-gameplay-probe"
+        package = root / "prototype/build-core" / (name + "-gameplay-probe")
     if not core.is_file() or not (package / "vp-mac-package.json").is_file():
         raise ValueError("Prebuilt beta files are missing. Extract the complete beta archive, or follow docs/DEVELOPMENT.md to build from source.")
     metadata = json.loads((package / "vp-mac-package.json").read_text())
     if metadata.get("content") != "vox-populi" or metadata.get("gameplay_test_ready") is not True:
         raise ValueError("This command requires the full Vox Populi package with its native save format.")
+    if metadata.get("interface", "standard") != ("eui" if eui else "standard"):
+        raise ValueError("The selected interface does not match the beta files. Extract the complete beta archive.")
     return core, package
-
-
-def check_conflicts(app):
-    dlc = app / "Contents/Assets/Assets/DLC"
-    for path in dlc.rglob("*"):
-        if path.name.casefold() == "ui_bc1" and (path.is_dir() or path.is_symlink()):
-            raise ValueError(f"EUI conflicts with beta 0.1: {path}\nQuit Civ V and move that folder completely outside the game's DLC folder before installing. Keep it to restore later.")
 
 
 def command_for(args, root=ROOT):
     command = {"install": "install-native", "uninstall": "restore", "status": "status", "report": "native-report"}[args.command]
     result = [sys.executable, str(root / "prototype/manage.py"), command, "--app", str(args.app)]
+    if getattr(args, "eui", False) and args.command != "install":
+        raise ValueError("--eui is available for install. Uninstall automatically restores either interface.")
     if args.command == "install":
-        check_conflicts(args.app)
-        core, package = install_payload(root)
+        core, package = install_payload(root, getattr(args, "eui", False))
         result += ["--native-core", str(core), "--data-package", str(package)]
     if args.dry_run:
         if args.command not in {"install", "uninstall"}:
@@ -58,6 +55,7 @@ def main(argv=None):
     parser.add_argument("--app", type=lambda p: Path(p).expanduser().resolve(), default=DEFAULT_APP,
                         help="Path to Civilization V.app when Steam uses another library")
     parser.add_argument("--dry-run", action="store_true", help="Check installation or removal without changing files")
+    parser.add_argument("--eui", action="store_true", help="Install the bundled VP-compatible Enhanced User Interface")
     args = parser.parse_args(argv)
     try:
         result = subprocess.run(command_for(args), check=False)

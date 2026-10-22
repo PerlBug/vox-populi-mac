@@ -68,6 +68,9 @@ def make_gui(root, distribution, output, cache):
     if metadata["version"] != version or metadata["source_commit"] != git(root, "rev-parse", "HEAD") or git(root, "status", "--porcelain"):
         raise ValueError("Build the matching command-line distribution from the current clean commit first")
     validate_package(distribution / "payload/libCvGameCoreDLL_Expansion2_DLL.dylib", distribution / "payload/VP_MAC_VP")
+    eui = validate_package(distribution / "payload/libCvGameCoreDLL_Expansion2_DLL.dylib", distribution / "payload/VP_MAC_VP_EUI")
+    if eui.get("interface") != "eui":
+        raise ValueError("GUI release requires the matching EUI package")
     name = "Vox Populi Mac Installer.app"
     output.mkdir(parents=True, exist_ok=True)
     final = output / name

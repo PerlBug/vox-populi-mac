@@ -46,6 +46,22 @@ For another Steam library, configure `-DVP_MAC_HOST_EXECUTABLE="/path/to/Civiliz
 
 `python3 vp-mac.py install` uses `payload/` in a release ZIP. In a source checkout it uses the default native core and full VP package paths shown above. The original `prototype/manage.py` commands remain available for development.
 
+Build the optional EUI variant from the same stock cache and native core:
+
+```sh
+python3 macos/tools/package_cp.py \
+  --app "$HOME/Library/Application Support/Steam/steamapps/common/Sid Meier's Civilization V/Civilization V.app" \
+  --cache "$HOME/Library/Application Support/Sid Meier's Civilization 5/cache" \
+  --runtime-assets --vox-populi --eui \
+  --output prototype/build-core/VP_MAC_VP_EUI-gameplay-probe
+```
+
+`vp-mac.py install --eui` selects that variant. Restore before switching. Both packages are required by the release builder (`--package` and `--eui-package` can select custom build locations). The tested standard package may be reused unchanged when the native core and pinned upstream revision are unchanged.
+
+The EUI variant appends the `(3a)` manifest after CP/VP, applies its database actions plus `VPUI Text/VPUI_tips_en_us.xml`, and excludes top-level `LUA` runtime directories from CP/VP as upstream's EUI installer requires. EUI compatibility assets load last; addin registration occurs after selecting the final consumers. BNW skin directory order comes from upstream `UI_bc1/EUI_2.Civ5Pkg` and `VPUI/VPUI_2.Civ5Pkg`. Their files are embedded under `Interface/` and registered in the managed package's BNW `Skin`; independent EUI package manifests are not installed. `GameplaySkin` still loads ordered mod layers and generated addin consumers. This keeps ownership, hashing and rollback in the existing data transaction without new native hooks or a gameplay fork.
+
+Test a new game for each interface, including city production, research, unit actions, plot tooltips, policy screens and save/reload/turn. Fixture tests establish packaging/transaction correctness, not UI behavior in the running game. Never replace a user's active beta merely to run installer tests; use an isolated app/user-data copy.
+
 Beta 0.1 intentionally ships the previously tested Debug core. An optimized build is a separate future test; rebuilding does not imply runtime validation.
 
 ## Updating upstream

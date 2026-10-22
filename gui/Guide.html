@@ -2,17 +2,21 @@
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Vox Populi for Mac — Installation Guide</title>
 <style>body{font:17px/1.6 -apple-system,BlinkMacSystemFont,sans-serif;max-width:780px;margin:60px auto;padding:0 24px;color:#23233b;background:#fafafd}h1{font-size:36px;line-height:1.15}h2{margin-top:40px;font-size:24px}li{margin:10px 0}.lead{color:#54546d;font-size:20px}.note{padding:18px 22px;border:1px solid #d9d6ed;border-radius:12px;background:#f1effb}a{color:#5146a3}code{font-size:.9em;background:#ededf4;padding:2px 5px;border-radius:4px}@media(prefers-color-scheme:dark){body{background:#1c1c24;color:#ededf5}.lead{color:#bcbccc}.note,code{background:#292737;border-color:#4d4663}a{color:#bcb3ff}}</style></head><body>
-<p class="lead">An unofficial community beta · Single player · Without EUI</p>
+<p class="lead">An unofficial community beta · Single player · Optional EUI</p>
 <h1>Vox Populi for Mac</h1>
 <p>Install Vox Populi’s improved AI, balance changes and interface for the Steam Mac version of Civilization V: Brave New World.</p>
 <h2>Install in a few clicks</h2>
 <ol><li>Extract the complete macOS ZIP. Keep <strong>Vox Populi Mac Installer.app</strong> in Documents or Applications.</li>
 <li>Launch normal, unmodified Brave New World once, then quit both the game and its launcher.</li>
 <li>Open the installer. It finds the default Steam game location. Use <strong>Choose Game…</strong> if your Steam library is elsewhere.</li>
-<li>Click <strong>Check Compatibility</strong>, then <strong>Install Beta</strong>. Wait for “Vox Populi is installed.”</li>
+<li>Select <strong>Enhanced User Interface (EUI)</strong> if wanted, or leave it unchecked for standard VP. Click <strong>Check Compatibility</strong>, then <strong>Install Beta</strong>. Wait for “Vox Populi is installed.”</li>
 <li>Launch through Steam and start a <strong>new regular Single Player game</strong>. No Mods-menu activation is required.</li></ol>
 <p>The installer includes its own Python runtimes. No Terminal commands, Python installation, administrator password or developer tools are needed to use it. It does need write access to your Steam game and Civ V user-data folders.</p>
 <p>Requires macOS 11 or later, the reviewed Steam Mac Aspyr 1.4.2 (180925) build, Gods &amp; Kings, Brave New World and the gameplay/civilization DLC. Apple Silicon runs the Intel game under Rosetta. The installer itself runs natively on Apple Silicon or Intel.</p>
+<h2>Optional Enhanced User Interface</h2>
+<p>The EUI checkbox installs the bundled VP-compatible EUI and matching compatibility screens. No separate download or Mods-menu activation is needed. This option is experimental; Mac in-game validation is pending.</p>
+<p>If a beta is already installed, close the game and click <strong>Uninstall / Restore</strong> first. Then choose your interface and install. Start a <strong>new game</strong> after switching interfaces. Previous beta saves are archived; cross-interface saves are untested.</p>
+<p>For an EUI test, found a city, choose production and research, check unit actions and tooltips, and open city and policy screens. Play a few turns, save, quit, relaunch, reload and finish another turn. Include your EUI selection when reporting problems.</p>
 <h2>Why can’t I install it in the MODS folder?</h2>
 <div class="note">Mac Civ V already has its own <strong>native game core</strong>, but it cannot load Vox Populi’s <strong>Windows DLL</strong> from the MODS folder. This port replaces the stock core with a native Mac version of the VP core. It also needs its matching VP database tables <strong>during game startup, before ordinary mod activation</strong>. Copying files to MODS cannot replace the Mac core or supply that early data load. The installer therefore installs the native core and its matching DLC-style data package together, with backups.</div>
 <p>This requirement applies to this VP port. Mods that only change SQL, Lua or assets do not necessarily need a replacement core.</p>
@@ -21,7 +25,7 @@
 <p>The installer verifies and backs up the original core, cache and saves. Beta games get a separate save folder and Mac save format. Start a new game; stock and Windows VP saves are unsupported.</p>
 <p>To return to normal Civ V, close the game and its launcher, reopen this installer and click <strong>Uninstall / Restore</strong>. Normal saves return. Beta saves and cache are preserved in dated folders; their paths appear under Details. Keep this installer until removal is complete.</p>
 <h2>Other mods</h2>
-<p>Use this beta with official DLC only. EUI (<code>UI_bc1</code>), other VP modpacks and replacement cores conflict. Move disabled DLC mods completely outside the game’s DLC folder. Additional UI, civilization and gameplay mods are untested; do not activate them for this beta. The installer does not detect every possible third-party modification.</p>
+<p>Use this beta with official DLC and its optional bundled EUI only. Separate EUI (<code>UI_bc1</code>) or <code>VPUI</code> copies, other VP modpacks and replacement cores conflict. Move separate DLC mods completely outside the game’s DLC folder before installing either interface option. The installer preserves them and supplies its own matching EUI when selected. Additional UI, civilization and gameplay mods are untested; do not activate them for this beta. The installer does not detect every possible third-party modification.</p>
 <p>Uninstall before Steam verification, game updates or switching core mods. If a changed game file or backup is detected, retain it and the error message rather than deleting it to force installation.</p>
 <h2>If the installer or game won’t open</h2>
 <p>This beta installer is ad hoc signed and is <strong>not notarized by Apple</strong>. For a downloaded copy you trust, Apple documents the per-app <strong>System Settings → Privacy &amp; Security → Open Anyway</strong> option after an attempted launch. See <a href="https://support.apple.com/en-au/102445">Apple’s guide to safely opening apps</a>.</p>

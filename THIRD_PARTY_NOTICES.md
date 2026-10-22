@@ -10,6 +10,8 @@ This is an unofficial Mac compatibility layer for the Community Patch / Vox Popu
 
 The Mac-specific changes are separate from the unmodified upstream checkout. Source and build instructions accompany beta archives. See `docs/DEVELOPMENT.md` for reproducing the build and the source snapshot layout.
 
+The optional Enhanced User Interface is bc1's EUI as bundled and adapted by Vox Populi, with the pinned upstream `UI_bc1`, `VPUI` and `(3a) VP - EUI Compatibility Files` sources. Existing file credits and notices are retained in the payload and upstream source snapshot. It is not a separately downloaded generic EUI release.
+
 ## Graphical installer runtimes
 
 The GUI app includes CPython 3.13.16 for Apple Silicon and Intel from Astral's [Python Build Standalone](https://github.com/astral-sh/python-build-standalone) release `20261013`. Exact download URLs and SHA-256 hashes are pinned in `gui/python-runtimes.json`. These are portable, self-contained distributions; see the [distribution documentation](https://docs.astral.sh/python-build-standalone/distributions/).

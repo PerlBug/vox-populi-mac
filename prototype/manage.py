@@ -171,6 +171,17 @@ def localization_cache_files(cache):
     return sorted(p.name for p in cache.glob("Localization-*.db") if p.is_file())
 
 
+def check_interface_conflicts(dlc):
+    identities = {"570f793e-fc33-417f-ae19-7cecccdd5f85", "570f793e-fc33-417f-ae18-7cecccdd5f85"}
+    for path in dlc.rglob("*"):
+        if path.name.casefold() in {"ui_bc1", "vpui"} and (path.is_dir() or path.is_symlink()):
+            raise ProbeError(f"Separate EUI / VPUI installation conflicts: {path}\n"
+                             "Move it completely outside the game's DLC folder first. The installer supplies its own matching files and preserves other mods.")
+        if path.is_file() and path.suffix.casefold() == ".civ5pkg" and any(guid in path.read_text(errors="replace").lower() for guid in identities):
+            raise ProbeError(f"Separate EUI / VPUI package conflicts: {path}\n"
+                             "Move its containing mod completely outside the game's DLC folder first.")
+
+
 def prepare_native_data(app, package, user_data, wrapper):
     regular(package / DATA_MANIFEST)
     metadata = json.loads((package / DATA_MANIFEST).read_text())
@@ -183,10 +194,13 @@ def prepare_native_data(app, package, user_data, wrapper):
     if {k: v for k, v in files.items() if k != DATA_MANIFEST} != declared:
         raise ProbeError("Data package files have changed; rebuild the package")
     plan = {"user_data": str(user_data.resolve()), "files": files,
-            "upstream_commit": metadata["upstream_commit"]}
+            "upstream_commit": metadata["upstream_commit"], "interface": metadata.get("interface", "standard")}
+    if plan["interface"] not in {"standard", "eui"}:
+        raise ProbeError("Unrecognized interface in native data package")
     target, cache, backup = data_paths(app, plan)
     if target.exists() or target.is_symlink() or backup.exists() or backup.is_symlink():
         raise ProbeError("A native data directory or cache backup already exists. Restore the previous test first.")
+    check_interface_conflicts(target.parent)
     if (target.parent / "VP_MODPACK").exists():
         raise ProbeError("An existing VP_MODPACK conflicts with this startup data package; preserve it outside DLC first.")
     for manifest in target.parent.rglob("*.Civ5Pkg"):
@@ -394,6 +408,8 @@ def status(app):
     if manifest.exists():
         data = load_manifest(manifest)
         result["core_kind"] = data.get("core_kind", "probe")
+        if "native_data" in data:
+            result["interface"] = data["native_data"].get("interface", "standard")
         if result["core_kind"] == "native":
             result["log"] = str(NATIVE_LOG)
         regular(backup)
