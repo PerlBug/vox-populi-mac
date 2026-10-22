@@ -29,6 +29,8 @@ def install_payload(root, eui=False):
         raise ValueError("This command requires the full Vox Populi package with its native save format.")
     if metadata.get("interface", "standard") != ("eui" if eui else "standard"):
         raise ValueError("The selected interface does not match the beta files. Extract the complete beta archive.")
+    if metadata.get("camera_controls", {}).get("schema") != 1:
+        raise ValueError("Matching WASD camera files are missing. Extract the complete beta archive, or rebuild its data packages.")
     return core, package
 
 

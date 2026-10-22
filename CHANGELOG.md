@@ -1,5 +1,13 @@
 # Release notes
 
+## 0.1.0-beta.6 — WASD camera movement
+
+- Adds W/A/S/D map panning to both standard VP and EUI, using upstream's existing arrow-key camera handlers. Arrow controls and Ctrl/Shift/Alt shortcuts remain available. Plain WASD now takes priority over unit hotkeys; use unit action buttons for those commands.
+- Stops custom movement on key release, popups, city/diplomacy screens, mouse clicks and WorldView hiding. Global key-up handling also covers releases outside the map context.
+- Keeps the adapter in a small Mac Lua module and appends its hook only to generated WorldView copies. Packaging checks upstream hook shape, synchronizes the EUI skin copy, and rejects stale camera payloads at release time. Upstream and the native core remain unchanged.
+- Adds behavior checks executed with Lua 5.1, including direction mapping, diagonal movement, repeats, modified shortcuts and cleanup. In-game WASD testing remains pending.
+- The tester reports beta.5's other changes work for now. Its EUI precedence fix and reversible startup movie/logo skipping are retained.
+
 ## 0.1.0-beta.5 — EUI screen precedence and startup skipping
 
 - Resolves overlapping EUI skin files to the final CP/VP/EUI compatibility version, including generated addin registrations. Base EUI contexts can no longer shadow VP's replacements through a direct skin lookup. This addresses the likely cause of the reported resource/improvement precondition crash while opening Options; an in-game retest is required.

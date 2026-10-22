@@ -264,6 +264,13 @@ class PackageTests(unittest.TestCase):
         (vp / "Art/texture.dds").write_bytes(b"VP texture")
         (vp / "Balance.lua").write_text("-- balance addin")
         (vp / "Map.lua").write_text("-- custom map")
+        for directory in [args[0] / "(1) Community Patch", vp]:
+            path = directory / "WorldView.lua"
+            path.write_text("function InputHandler(message, key, data) return false end\nContextPtr:SetInputHandler( InputHandler );\n")
+            manifest = next(directory.glob("*.modinfo"))
+            tree = ET.parse(manifest)
+            ET.SubElement(tree.find("Files"), "File", {"import": "1"}).text = path.name
+            tree.write(manifest)
         return args
 
     def test_vp_layers_preserve_action_order_overrides_and_all_addins(self):
@@ -283,6 +290,19 @@ class PackageTests(unittest.TestCase):
         self.assertEqual(report["runtime_assets"]["map_scripts"], ["Map.lua"])
         self.assertEqual((output / "Mods/02_(2) Vox Populi/Art/texture.dds").read_bytes(), b"VP texture")
         self.assertTrue((output / "Mods/01_(1) Community Patch/Art/texture.dds").is_file())
+        self.assertEqual(report["camera_controls"]["schema"], 1)
+        for name, sha in report["camera_controls"]["world_views"].items():
+            self.assertEqual(pack.sha256(output / name), sha)
+            self.assertIn("VPMacInstallCamera(InputHandler)", (output / name).read_text())
+        self.assertNotIn("VPMacInstallCamera", (args[0] / "(2) Vox Populi/WorldView.lua").read_text())
+
+    def test_changed_upstream_camera_context_aborts_packaging(self):
+        args = self.vp_fixture()
+        (args[0] / "(2) Vox Populi/WorldView.lua").write_text("ContextPtr:SetInputHandler(NewHandler)\n")
+        output = self.root / "rejected"
+        with self.assertRaisesRegex(pack.PackageError, "WorldView input hooks changed"):
+            pack.build(*args, output, include_runtime=True, include_vp=True)
+        self.assertFalse(output.exists())
 
     def test_vp_dependency_version_and_missing_runtime_are_rejected(self):
         args = self.vp_fixture()
@@ -325,6 +345,7 @@ class PackageTests(unittest.TestCase):
               <Skin><Directory>Core</Directory></Skin></UISkin></Civ5Package>''')
         (args[0] / "UI_bc1/Core/UnitPanel.lua").write_text("-- base EUI panel must not shadow VP compatibility")
         (args[0] / "UI_bc1/Core/InGame.lua").write_text("-- base consumer without VP addins")
+        (args[0] / "UI_bc1/Core/WorldView.lua").write_text("-- base EUI input must not shadow the camera adapter")
         (args[0] / "VPUI Text").mkdir()
         (args[0] / "VPUI Text/VPUI_tips_en_us.xml").write_text('<GameData><Language_en_US><Replace Tag="TIP" Text="VP tip"/></Language_en_US></GameData>')
         return args
@@ -347,7 +368,8 @@ class PackageTests(unittest.TestCase):
             self.assertIn(f'g_uiAddins[#g_uiAddins + 1] = "{context}";', consumer)
         self.assertEqual((output / "Interface/UI_bc1/Core/InGame.lua").read_text(), consumer)
         self.assertEqual({n["target"] for n in report["interface_overrides"]},
-                         {"Interface/UI_bc1/Core/InGame.lua", "Interface/UI_bc1/Core/UnitPanel.lua"})
+                         {"Interface/UI_bc1/Core/InGame.lua", "Interface/UI_bc1/Core/UnitPanel.lua", "Interface/UI_bc1/Core/WorldView.lua"})
+        self.assertEqual((output / "Interface/UI_bc1/Core/WorldView.lua").read_bytes(), (output / "UI/WorldView.lua").read_bytes())
         skin = pack.xml(output / "VPMac.Civ5Pkg").find("UISkin")
         self.assertEqual([n.text for n in skin.findall("./Skin/Directory")], ["Interface/UI_bc1/Core", "Interface/VPUI/Core"])
         self.assertEqual([n.text for n in skin.findall("./GameplaySkin/Directory")], ["Mods", "UI"])

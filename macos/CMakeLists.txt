@@ -178,4 +178,10 @@ if(BUILD_TESTING)
     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_package.py")
   add_test(NAME beta_release_tools
     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/../tools/tests/test_beta.py")
+  find_program(VP_MAC_LUA_EXECUTABLE NAMES lua5.1 lua51)
+  if(VP_MAC_LUA_EXECUTABLE)
+    add_test(NAME wasd_camera_input
+      COMMAND "${VP_MAC_LUA_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/camera_selftest.lua"
+        "${CMAKE_CURRENT_SOURCE_DIR}/runtime/VPMacCamera.lua")
+  endif()
 endif()

@@ -46,8 +46,13 @@ class BetaTests(unittest.TestCase):
         core.write_bytes(b"fixture core")
         package.mkdir(parents=True)
         (package / "example.xml").write_text("<GameData/>")
+        (package / "UI").mkdir()
+        (package / "UI/VPMacCamera.lua").write_bytes((ROOT / "macos/runtime/VPMacCamera.lua").read_bytes())
+        (package / "UI/WorldView.lua").write_text("-- generated camera context fixture")
         metadata = {"content": "vox-populi", "gameplay_test_ready": True,
                     "interface": "eui" if eui else "standard",
+                    "camera_controls": {"schema": 1, "module_sha256": release.digest(package / "UI/VPMacCamera.lua"),
+                                        "world_views": {"UI/WorldView.lua": release.digest(package / "UI/WorldView.lua")}},
                     "native_core_sha256": hashlib.sha256(core.read_bytes()).hexdigest(),
                     "files": release.inventory(package)}
         (package / "vp-mac-package.json").write_text(json.dumps(metadata))
@@ -130,6 +135,17 @@ class BetaTests(unittest.TestCase):
         (package / "linked.xml").symlink_to(package / "example.xml")
         with self.assertRaisesRegex(ValueError, "Symlinks"):
             release.inventory(package)
+
+    def test_release_refuses_stale_camera_payload_even_with_a_matching_inventory(self):
+        core, package = self.payload()
+        path = package / "vp-mac-package.json"
+        metadata = json.loads(path.read_text())
+        metadata.pop("camera_controls")
+        path.write_text(json.dumps(metadata))
+        with self.assertRaisesRegex(ValueError, "matching WASD camera controls"):
+            release.validate_package(core, package)
+        with self.assertRaisesRegex(ValueError, "Matching WASD camera files"):
+            player.install_payload(self.root)
 
     def test_eui_release_refuses_unresolved_or_mismatched_skin_files(self):
         core, package = self.payload(eui=True)

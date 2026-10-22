@@ -50,6 +50,12 @@ def validate_package(core, package):
         raise ValueError("Package and native core hashes differ")
     if {k: v for k, v in files.items() if k != "vp-mac-package.json"} != metadata.get("files"):
         raise ValueError("Data package inventory differs from its manifest")
+    camera = metadata.get("camera_controls", {})
+    if (camera.get("schema") != 1 or files.get("UI/VPMacCamera.lua") != camera.get("module_sha256")
+            or camera.get("module_sha256") != digest(ROOT / "macos/runtime/VPMacCamera.lua")
+            or "UI/WorldView.lua" not in camera.get("world_views", {})
+            or any(files.get(name) != sha for name, sha in camera["world_views"].items())):
+        raise ValueError("Rebuild VP data: matching WASD camera controls are missing or changed")
     if metadata.get("interface") == "eui":
         overrides = metadata.get("interface_overrides")
         if not overrides:

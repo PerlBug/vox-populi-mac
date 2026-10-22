@@ -56,7 +56,17 @@ python3 macos/tools/package_cp.py \
   --output prototype/build-core/VP_MAC_VP_EUI-gameplay-probe
 ```
 
-`vp-mac.py install --eui` selects that variant. Restore before switching. Both packages are required by the release builder (`--package` and `--eui-package` can select custom build locations). The tested standard package may be reused unchanged when the native core and pinned upstream revision are unchanged.
+`vp-mac.py install --eui` selects that variant. Restore before switching. Both packages are required by the release builder (`--package` and `--eui-package` can select custom build locations). Rebuild both packages when the Mac runtime adapter changes, even if the core and upstream revision are unchanged. The release builder verifies the current camera module hash and its generated WorldView copies.
+
+WASD support lives in `macos/runtime/VPMacCamera.lua`. Packaging checks the upstream WorldView input-hook shape, appends a small include/install call to generated mod copies, selects the final WorldView under `UI/`, and lets EUI skin resolution copy that same final version. The adapter delegates panning to upstream arrow handlers. It only intercepts unmodified WASD in the WorldView input context, consumes its releases, and stops custom movement on the existing key-up, popup, city, diplomacy and hide events. No native hooks or copied upstream source fork are needed.
+
+Run the camera behavior checks with a developer-side Lua 5.1 interpreter (the game already supplies its own Lua; players need no additional runtime):
+
+```sh
+/path/to/lua5.1 macos/tests/camera_selftest.lua macos/runtime/VPMacCamera.lua
+```
+
+Set `-DVP_MAC_LUA_EXECUTABLE=/path/to/lua5.1` when configuring the test build to include `wasd_camera_input` in CTest. Lua 5.1.4 source and its SHA-256 are available from the [official Lua download area](https://www.lua.org/ftp/). This test tool is not shipped in the installer.
 
 The EUI variant appends the `(3a)` manifest after CP/VP, applies its database actions plus `VPUI Text/VPUI_tips_en_us.xml`, and excludes top-level `LUA` runtime directories from CP/VP as upstream's EUI installer requires. EUI compatibility assets load last; addin registration occurs after selecting the final consumers. BNW skin directory order comes from upstream `UI_bc1/EUI_2.Civ5Pkg` and `VPUI/VPUI_2.Civ5Pkg`. Their files are embedded under `Interface/` and registered in the managed package's BNW `Skin`; independent EUI package manifests are not installed. `GameplaySkin` still loads ordered mod layers and generated addin consumers. Every overlapping embedded skin file is then replaced by the final manifest-selected VFS file (or generated addin consumer), recorded under `interface_overrides`. This makes direct skin lookups and gameplay lookups agree, including VP's guarded plot tooltips. No upstream Lua is edited. This keeps ownership, hashing and rollback in the existing data transaction without new native hooks or a gameplay fork.
 

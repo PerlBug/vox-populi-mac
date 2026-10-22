@@ -104,7 +104,7 @@ final class Installer: NSObject, NSApplicationDelegate, NSWindowDelegate {
         globe.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 42, weight: .regular)
         globe.widthAnchor.constraint(equalToConstant: 52).isActive = true
         let header = stack([globe, stack([title, subtitle], spacing: 4)], vertical: false, spacing: 16)
-        let introduction = label("Install Vox Populi’s AI, balance changes and interface for Civilization V: Brave New World.")
+        let introduction = label("Install Vox Populi’s AI, balance changes and interface for Civilization V: Brave New World, with WASD camera movement.")
         eui.target = self
         eui.action = #selector(interfaceChanged)
         eui.state = CommandLine.arguments.contains("--eui") ? .on : .off

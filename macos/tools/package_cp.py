@@ -327,6 +327,28 @@ def resolve_interface_overrides(package, layers):
     return overrides
 
 
+def camera_controls(package, layers):
+    """Append one Mac hook to generated WorldView copies, never upstream."""
+    views = [package / "Mods" / layer["folder"] / name
+             for layer in layers for name in layer["source_files"]
+             if PurePosixPath(name).name.casefold() == "worldview.lua"]
+    if not views:
+        raise PackageError("Upstream WorldView input context is missing")
+    hook = '\ninclude("VPMacCamera")\nVPMacInstallCamera(InputHandler)\n'
+    for path in views:
+        text = path.read_text(encoding="utf-8-sig")
+        if (len(re.findall(r"ContextPtr\s*:\s*SetInputHandler\s*\(\s*InputHandler\s*\)", text)) != 1
+                or "SetShowHideHandler" in text or "VPMacInstallCamera" in text):
+            raise PackageError("Upstream WorldView input hooks changed; review the WASD adapter")
+        path.write_text(text + hook)
+    final = package / "UI/WorldView.lua"
+    shutil.copyfile(views[-1], final)
+    module = package / "UI/VPMacCamera.lua"
+    shutil.copyfile(ROOT / "macos/runtime/VPMacCamera.lua", module)
+    return {"schema": 1, "module_sha256": sha256(module),
+            "world_views": {str(p.relative_to(package)): sha256(p) for p in views + [final]}}
+
+
 def mod_layers(upstream, include_vp, include_eui=False):
     names = [("(1) Community Patch", "d1b6328c-ff44-4b0d-aad7-c657f83610cd")]
     if include_vp:
@@ -510,6 +532,7 @@ def _build(upstream, app, cache, core, output, include_runtime, include_vp, incl
             (package / directory).mkdir()
         runtime = None
         interface_overrides = []
+        camera = None
         if include_runtime:
             if include_vp:
                 parts = [runtime_files(directory, mod, maker, package,
@@ -518,6 +541,7 @@ def _build(upstream, app, cache, core, output, include_runtime, include_vp, incl
                          for i, (directory, mod, _) in enumerate(layers, 1)]
                 addins = [a for part in parts for a in part["addins"]]
                 register_addins(addins, package)
+                camera = camera_controls(package, parts)
                 runtime = {"layers": parts, "files_copied": sum(p["files_copied"] for p in parts),
                            "addins": addins, "map_scripts": [f for p in parts for f in p["map_scripts"]]}
                 if include_eui:
@@ -534,6 +558,7 @@ def _build(upstream, app, cache, core, output, include_runtime, include_vp, incl
                   "content": "vox-populi" if include_vp else "community-patch",
                   "interface": "eui" if include_eui else "standard", "interface_assets": interface,
                   "interface_overrides": interface_overrides,
+                  "camera_controls": camera,
                   "mods": [{"directory": directory.name, "id": mod.get("id"), "version": mod.get("version"),
                             "manifest_sha256": sha256(manifest)} for directory, mod, manifest in layers],
                   "gameplay_tables": table_count, "overridden_xml_files": len(overridden),
