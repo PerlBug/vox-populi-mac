@@ -19,13 +19,15 @@ The graphical beta is the **complete `-macOS.zip` release**, not GitHub's automa
 
 ## Install
 
-1. Extract `Vox-Populi-Mac-0.1.0-beta.4-macOS.zip` and keep **Vox Populi Mac Installer.app** in Documents or Applications.
+1. Extract `Vox-Populi-Mac-0.1.0-beta.5-macOS.zip` and keep **Vox Populi Mac Installer.app** in Documents or Applications.
 2. Double-click the app. It finds the default Steam installation. If Steam uses another library, click **Choose Game…** and select `Civilization V.app`.
 3. Leave **Enhanced User Interface (EUI)** unchecked for the standard interface, or check it to install the bundled VP-compatible EUI. Click **Check Compatibility** to check your selection without changing files.
 4. Click **Install Beta** and wait for **Vox Populi is installed**. No administrator password is requested; the app needs normal write access to your game and user-data folders.
 5. Launch Civ V through Steam with BNW enabled. Choose **regular Single Player → Set Up Game** and start a **new game**. The package loads automatically; there is no Mods-menu activation step.
 
 This community beta is **ad hoc signed, not Apple-notarized**. macOS may block a downloaded copy. For an app you trust, Apple's per-app **System Settings → Privacy & Security → Open Anyway** flow may be available after the first launch attempt. See [Apple's instructions](https://support.apple.com/en-au/102445).
+
+The installer automatically skips the **startup movies, animated publisher logos and opening cinematic**. It sets the game's intro-skip option and moves the opening movie files to inactive backup names. Uninstall restores the original files and your previous intro preference while keeping other settings changes. The game still needs time to load the menu.
 
 ## Choosing EUI or changing an existing beta
 
@@ -78,6 +80,8 @@ Uninstall this beta before Steam file verification, a game update, or installing
 Quit Civ V and its launcher, reopen **Vox Populi Mac Installer.app**, and click **Uninstall / Restore**. Wait for **Your original game is restored**.
 
 This restores the verified original core, original cache and original saves, and preserves the beta session separately. **Do not delete backups or use Steam verification as the normal uninstall method.** Keep the installer app until removal is complete. The dates and paths of preserved beta sessions appear under **Show technical details**.
+
+For beta.5, use **this installer or a newer version** to uninstall. Older installers refuse the new backup-manifest version because they cannot restore its startup movie files. The `.vp-mac-disabled` files beside the original movie locations are verified backups; keep them until uninstall completes. The new installer can also restore earlier betas.
 
 ## What has been tested?
 

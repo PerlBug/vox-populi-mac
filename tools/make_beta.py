@@ -50,6 +50,14 @@ def validate_package(core, package):
         raise ValueError("Package and native core hashes differ")
     if {k: v for k, v in files.items() if k != "vp-mac-package.json"} != metadata.get("files"):
         raise ValueError("Data package inventory differs from its manifest")
+    if metadata.get("interface") == "eui":
+        overrides = metadata.get("interface_overrides")
+        if not overrides:
+            raise ValueError("Rebuild EUI data: resolved skin overrides are missing")
+        for item in overrides:
+            if (not item["target"].startswith("Interface/") or files.get(item["target"]) != item["sha256"]
+                    or files.get(item["source"]) != item["sha256"]):
+                raise ValueError("EUI skin overrides differ from their winning runtime files")
     if any(Path(name).suffix.casefold() in {".dll", ".dylib", ".exe", ".so"} for name in files):
         raise ValueError("Unexpected executable in data package")
     return metadata

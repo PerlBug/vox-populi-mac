@@ -1,5 +1,13 @@
 # Release notes
 
+## 0.1.0-beta.5 — EUI screen precedence and startup skipping
+
+- Resolves overlapping EUI skin files to the final CP/VP/EUI compatibility version, including generated addin registrations. Base EUI contexts can no longer shadow VP's replacements through a direct skin lookup. This addresses the likely cause of the reported resource/improvement precondition crash while opening Options; an in-game retest is required.
+- Automatically skips the startup movie sequence, including animated publisher logos. Moves installed base-game, Gods & Kings and BNW opening `.mov` files to verified inactive backup names; uninstall restores their original bytes. Gameplay media is retained.
+- Sets `GameSettings/SkipIntroVideo` in `UserSettings.ini` and restores its previous value on uninstall while preserving other option changes.
+- Includes interrupted-install recovery and changed-file protection for startup files. Uses transaction manifest version 2 so older installers refuse removal; use beta.5 or newer to uninstall this version. Existing beta.4 and older transactions remain restorable by the new installer.
+- Native core, upstream checkout, standard gameplay payload and Mac save format are unchanged. EUI crash fix and startup flow need testing in the running Mac game.
+
 ## 0.1.0-beta.4 — optional EUI
 
 - Adds an optional Enhanced User Interface checkbox to the Mac installer, with standard VP selected by default. Shows the installed interface and requires restoration before switching.

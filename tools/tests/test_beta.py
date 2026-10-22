@@ -131,6 +131,26 @@ class BetaTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Symlinks"):
             release.inventory(package)
 
+    def test_eui_release_refuses_unresolved_or_mismatched_skin_files(self):
+        core, package = self.payload(eui=True)
+        with self.assertRaisesRegex(ValueError, "resolved skin overrides are missing"):
+            release.validate_package(core, package)
+        target = package / "Interface/Panel.xml"
+        target.parent.mkdir()
+        target.write_bytes((package / "example.xml").read_bytes())
+        path = package / "vp-mac-package.json"
+        metadata = json.loads(path.read_text())
+        metadata["files"] = {k: v for k, v in release.inventory(package).items() if k != path.name}
+        metadata["interface_overrides"] = [{"target": "Interface/Panel.xml", "source": "example.xml",
+                                            "sha256": metadata["files"]["example.xml"]}]
+        path.write_text(json.dumps(metadata))
+        release.validate_package(core, package)
+        target.write_text("<Context/>")
+        metadata["files"]["Interface/Panel.xml"] = release.digest(target)
+        path.write_text(json.dumps(metadata))
+        with self.assertRaisesRegex(ValueError, "skin overrides differ"):
+            release.validate_package(core, package)
+
     def test_release_refuses_executables_even_with_matching_inventory(self):
         core, package = self.payload()
         (package / "foreign.dll").write_bytes(b"MZ")

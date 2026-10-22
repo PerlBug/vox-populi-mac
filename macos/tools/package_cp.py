@@ -307,6 +307,26 @@ def register_addins(addins, package):
                 f.write('\n' + line + '\n')
 
 
+def resolve_interface_overrides(package, layers):
+    """Make Skin lookups agree with the final manifest-selected VFS files.
+
+    Aspyr can load a Skin context directly instead of its GameplaySkin
+    replacement. Keep every embedded copy at the winning upstream version,
+    including generated addin registrations, without editing upstream Lua.
+    """
+    winners = {PurePosixPath(name).name.casefold(): package / "Mods" / layer["folder"] / name
+               for layer in layers for name in layer["source_files"]}
+    winners.update({p.name.casefold(): p for p in (package / "UI").iterdir() if p.is_file()})
+    overrides = []
+    for target in sorted((package / "Interface").rglob("*")):
+        source = winners.get(target.name.casefold())
+        if target.is_file() and source and sha256(target) != sha256(source):
+            shutil.copyfile(source, target)
+            overrides.append({"target": str(target.relative_to(package)),
+                              "source": str(source.relative_to(package)), "sha256": sha256(target)})
+    return overrides
+
+
 def mod_layers(upstream, include_vp, include_eui=False):
     names = [("(1) Community Patch", "d1b6328c-ff44-4b0d-aad7-c657f83610cd")]
     if include_vp:
@@ -489,6 +509,7 @@ def _build(upstream, app, cache, core, output, include_runtime, include_vp, incl
             ET.SubElement(gameplay, "Directory").text = directory
             (package / directory).mkdir()
         runtime = None
+        interface_overrides = []
         if include_runtime:
             if include_vp:
                 parts = [runtime_files(directory, mod, maker, package,
@@ -499,6 +520,8 @@ def _build(upstream, app, cache, core, output, include_runtime, include_vp, incl
                 register_addins(addins, package)
                 runtime = {"layers": parts, "files_copied": sum(p["files_copied"] for p in parts),
                            "addins": addins, "map_scripts": [f for p in parts for f in p["map_scripts"]]}
+                if include_eui:
+                    interface_overrides = resolve_interface_overrides(package, parts)
             else:
                 runtime = runtime_files(layers[0][0], layers[0][1], maker, package)
         write_xml(pkg, package / "VPMac.Civ5Pkg")
@@ -510,6 +533,7 @@ def _build(upstream, app, cache, core, output, include_runtime, include_vp, incl
                   "localization_sha256": sha256(localized), "actions": applied, "repairs": corrections,
                   "content": "vox-populi" if include_vp else "community-patch",
                   "interface": "eui" if include_eui else "standard", "interface_assets": interface,
+                  "interface_overrides": interface_overrides,
                   "mods": [{"directory": directory.name, "id": mod.get("id"), "version": mod.get("version"),
                             "manifest_sha256": sha256(manifest)} for directory, mod, manifest in layers],
                   "gameplay_tables": table_count, "overridden_xml_files": len(overridden),
@@ -540,7 +564,7 @@ def main():
                        include_runtime=args.runtime_assets, include_vp=args.vox_populi, include_eui=args.eui)
     except (OSError, ValueError, sqlite3.Error, PackageError) as e:
         parser.exit(1, f"Error: {e}\n")
-    print(json.dumps({k: v for k, v in report.items() if k not in {"files", "actions", "runtime_assets"}}, indent=2))
+    print(json.dumps({k: v for k, v in report.items() if k not in {"files", "actions", "runtime_assets", "interface_assets", "interface_overrides"}}, indent=2))
 
 
 if __name__ == "__main__":

@@ -12,6 +12,7 @@
 <li>Select <strong>Enhanced User Interface (EUI)</strong> if wanted, or leave it unchecked for standard VP. Click <strong>Check Compatibility</strong>, then <strong>Install Beta</strong>. Wait for “Vox Populi is installed.”</li>
 <li>Launch through Steam and start a <strong>new regular Single Player game</strong>. No Mods-menu activation is required.</li></ol>
 <p>The installer includes its own Python runtimes. No Terminal commands, Python installation, administrator password or developer tools are needed to use it. It does need write access to your Steam game and Civ V user-data folders.</p>
+<p><strong>Startup movies and animated publisher logos are skipped automatically.</strong> Their files are moved to verified inactive backup names, and the intro-skip option is enabled. Uninstall restores the original movie files and your previous intro preference while keeping other settings changes. Menu loading still takes time.</p>
 <p>Requires macOS 11 or later, the reviewed Steam Mac Aspyr 1.4.2 (180925) build, Gods &amp; Kings, Brave New World and the gameplay/civilization DLC. Apple Silicon runs the Intel game under Rosetta. The installer itself runs natively on Apple Silicon or Intel.</p>
 <h2>Optional Enhanced User Interface</h2>
 <p>The EUI checkbox installs the bundled VP-compatible EUI and matching compatibility screens. No separate download or Mods-menu activation is needed. This option is experimental; Mac in-game validation is pending.</p>
@@ -24,6 +25,7 @@
 <h2>Your normal game and saves are preserved</h2>
 <p>The installer verifies and backs up the original core, cache and saves. Beta games get a separate save folder and Mac save format. Start a new game; stock and Windows VP saves are unsupported.</p>
 <p>To return to normal Civ V, close the game and its launcher, reopen this installer and click <strong>Uninstall / Restore</strong>. Normal saves return. Beta saves and cache are preserved in dated folders; their paths appear under Details. Keep this installer until removal is complete.</p>
+<p>Use the <strong>beta.5 installer or newer</strong> to uninstall beta.5. Older installers refuse its new backup manifest because they cannot restore startup movies. Keep the <code>.vp-mac-disabled</code> movie backups until restoration completes. This installer can also restore earlier betas.</p>
 <h2>Other mods</h2>
 <p>Use this beta with official DLC and its optional bundled EUI only. Separate EUI (<code>UI_bc1</code>) or <code>VPUI</code> copies, other VP modpacks and replacement cores conflict. Move separate DLC mods completely outside the game’s DLC folder before installing either interface option. The installer preserves them and supplies its own matching EUI when selected. Additional UI, civilization and gameplay mods are untested; do not activate them for this beta. The installer does not detect every possible third-party modification.</p>
 <p>Uninstall before Steam verification, game updates or switching core mods. If a changed game file or backup is detected, retain it and the error message rather than deleting it to force installation.</p>

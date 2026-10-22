@@ -323,6 +323,8 @@ class PackageTests(unittest.TestCase):
             (directory / manifest).write_text('''<Civ5Package>
               <UISkin name="Expansion2Primary" set="Expansion2" platform="Common">
               <Skin><Directory>Core</Directory></Skin></UISkin></Civ5Package>''')
+        (args[0] / "UI_bc1/Core/UnitPanel.lua").write_text("-- base EUI panel must not shadow VP compatibility")
+        (args[0] / "UI_bc1/Core/InGame.lua").write_text("-- base consumer without VP addins")
         (args[0] / "VPUI Text").mkdir()
         (args[0] / "VPUI Text/VPUI_tips_en_us.xml").write_text('<GameData><Language_en_US><Replace Tag="TIP" Text="VP tip"/></Language_en_US></GameData>')
         return args
@@ -338,10 +340,14 @@ class PackageTests(unittest.TestCase):
         for name in ["01_(1) Community Patch", "02_(2) Vox Populi"]:
             self.assertFalse((output / "Mods" / name / "LUA").exists())
         self.assertEqual((output / "Mods/03_(3a) VP - EUI Compatibility Files/LUA/UnitPanel.lua").read_text(), "-- EUI compatibility panel")
+        self.assertEqual((output / "Interface/UI_bc1/Core/UnitPanel.lua").read_text(), "-- EUI compatibility panel")
         consumer = (output / "UI/InGame.lua").read_text()
         self.assertIn("EUI consumer", consumer)
         for context in ["Panel", "Logic", "Balance"]:
             self.assertIn(f'g_uiAddins[#g_uiAddins + 1] = "{context}";', consumer)
+        self.assertEqual((output / "Interface/UI_bc1/Core/InGame.lua").read_text(), consumer)
+        self.assertEqual({n["target"] for n in report["interface_overrides"]},
+                         {"Interface/UI_bc1/Core/InGame.lua", "Interface/UI_bc1/Core/UnitPanel.lua"})
         skin = pack.xml(output / "VPMac.Civ5Pkg").find("UISkin")
         self.assertEqual([n.text for n in skin.findall("./Skin/Directory")], ["Interface/UI_bc1/Core", "Interface/VPUI/Core"])
         self.assertEqual([n.text for n in skin.findall("./GameplaySkin/Directory")], ["Mods", "UI"])

@@ -35,6 +35,12 @@ NATIVE_LOG = LOG.with_name("VoxPopMacNativeCore.log")
 USER_DATA = LOG.parent.parent
 DATA_DIRECTORY = "VP_MAC_CP"
 DATA_MANIFEST = "vp-mac-package.json"
+STARTUP_MOVIES = {
+    "Contents/Assets": r"Civ5_Opening_Movie_[a-z]{2}_[A-Z]{2}\.mov",
+    "Contents/Assets/Assets/DLC/Expansion": r"Civ5XP_Opening_Movie_[a-z]{2}_[A-Z]{2}\.mov",
+    "Contents/Assets/Assets/DLC/Expansion2": r"Civ5XP2_Opening_Movie_[a-z]{2}_[A-Z]{2}\.mov",
+}
+MOVIE_BACKUP_SUFFIX = ".vp-mac-disabled"
 
 
 class ProbeError(RuntimeError):
@@ -92,7 +98,7 @@ def paths(app):
 def load_manifest(path):
     regular(path)
     data = json.loads(path.read_text())
-    if data.get("schema") != 1 or data.get("probe") != MARKER.decode():
+    if data.get("schema") not in {1, 2} or data.get("probe") != MARKER.decode():
         raise ProbeError(f"Unrecognized backup manifest: {path}")
     if data.get("core_kind", "probe") not in {"probe", "native"}:
         raise ProbeError(f"Unrecognized core kind: {path}")
@@ -150,6 +156,96 @@ def data_paths(app, plan):
 def save_paths(plan):
     saves = Path(plan["user_data"]) / "Saves"
     return saves, saves.with_name("Saves.vp-mac-stock-backup")
+
+
+def intro_video_setting(path):
+    regular(path)
+    content = path.read_bytes()
+    sections = list(re.finditer(rb"(?mi)^\[GameSettings\][ \t]*\r?$([\s\S]*?)(?=^\[|\Z)", content))
+    if len(sections) == 1:
+        section = sections[0]
+        settings = list(re.finditer(rb"(?mi)^[ \t]*SkipIntroVideo[ \t]*=[ \t]*([^\r\n]*)", section[1]))
+        if len(settings) == 1 and re.fullmatch(rb"[01][ \t]*(?:[;#].*)?", settings[0][1]):
+            setting = settings[0]
+            return content, section.start(1) + setting.start(1)
+    raise ProbeError("UserSettings.ini has no unique GameSettings/SkipIntroVideo setting. Restore and launch stock BNW once, then quit before installing again.")
+
+
+def set_intro_video(plan, restore=False):
+    path = Path(plan["user_data"]) / "UserSettings.ini"
+    content, offset = intro_video_setting(path)
+    if not restore and hashlib.sha256(content).hexdigest() != plan["intro_video"]["sha256"]:
+        raise ProbeError("UserSettings.ini changed during preparation. Run restore before retrying.")
+    value = plan["intro_video"]["original_value"].encode() if restore else b"1"
+    if value not in {b"0", b"1"}:
+        raise ProbeError("Unrecognized original intro-video setting; preserving all files")
+    if content[offset:offset + 1] == value:
+        return
+    fd, name = tempfile.mkstemp(prefix=".vp-settings-", dir=path.parent)
+    temporary = Path(name)
+    try:
+        with os.fdopen(fd, "wb") as output:
+            output.write(content[:offset] + value + content[offset + 1:])
+            output.flush()
+            os.fsync(output.fileno())
+        temporary.chmod(stat.S_IMODE(path.stat().st_mode))
+        os.replace(temporary, path)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def movie_paths(app, relative):
+    path = Path(relative)
+    pattern = STARTUP_MOVIES.get(path.parent.as_posix())
+    if not pattern or not re.fullmatch(pattern, path.name):
+        raise ProbeError(f"Unrecognized startup movie path: {relative}")
+    original = app.resolve() / path
+    if not original.parent.resolve().is_relative_to(app.resolve()):
+        raise ProbeError(f"Startup movie directory leaves the game app: {relative}")
+    return original, original.with_name(original.name + MOVIE_BACKUP_SUFFIX)
+
+
+def prepare_startup_movies(app):
+    result = []
+    for folder, pattern in STARTUP_MOVIES.items():
+        for path in sorted((app / folder).glob("*")):
+            name = path.name.removesuffix(MOVIE_BACKUP_SUFFIX)
+            if re.fullmatch(pattern, name):
+                original, backup = movie_paths(app, str(Path(folder) / name))
+                if backup.exists() or backup.is_symlink():
+                    raise ProbeError(f"An untracked startup movie backup exists; preserving it: {backup}")
+                regular(original)
+                result.append({"path": str(original.relative_to(app.resolve())), "sha256": digest(original)})
+    return result
+
+
+def stage_startup_movies(app, movies):
+    for movie in movies:
+        original, backup = movie_paths(app, movie["path"])
+        regular(original)
+        if digest(original) != movie["sha256"] or backup.exists() or backup.is_symlink():
+            raise ProbeError("Startup movies changed during preparation. Run restore before retrying.")
+    for movie in movies:
+        original, backup = movie_paths(app, movie["path"])
+        original.rename(backup)
+
+
+def validate_startup_movies(app, movies):
+    for movie in movies:
+        original, backup = movie_paths(app, movie["path"])
+        if (original.exists() or original.is_symlink()) and (backup.exists() or backup.is_symlink()):
+            raise ProbeError(f"A startup movie was replaced while disabled; preserving both files: {original}")
+        remaining = backup if backup.exists() or backup.is_symlink() else original
+        regular(remaining)
+        if digest(remaining) != movie["sha256"]:
+            raise ProbeError(f"Startup movie or backup changed; preserving all files: {remaining}")
+
+
+def restore_startup_movies(app, movies):
+    for movie in movies:
+        original, backup = movie_paths(app, movie["path"])
+        if backup.exists():
+            backup.rename(original)
 
 
 def localization_cache_files(cache):
@@ -217,6 +313,11 @@ def prepare_native_data(app, package, user_data, wrapper):
             raise ProbeError("A stock save backup already exists. Restore the previous gameplay test first.")
         plan["save_directory_existed"] = saves.exists()
         plan["save_files"] = tree_hashes(saves) if saves.exists() or saves.is_symlink() else {}
+    if metadata.get("content") == "vox-populi":
+        settings, offset = intro_video_setting(user_data / "UserSettings.ini")
+        plan["intro_video"] = {"sha256": hashlib.sha256(settings).hexdigest(),
+                               "original_value": chr(settings[offset])}
+        plan["startup_movies"] = prepare_startup_movies(app)
     return plan
 
 
@@ -224,6 +325,9 @@ def stage_native_data(app, package, plan):
     target, cache, backup = data_paths(app, plan)
     if tree_hashes(cache) != plan["cache_files"]:
         raise ProbeError("Game cache changed during preparation; run restore before retrying")
+    if "intro_video" in plan:
+        set_intro_video(plan)
+    stage_startup_movies(app, plan.get("startup_movies", []))
     if "save_files" in plan:
         saves, save_backup = save_paths(plan)
         current = tree_hashes(saves) if saves.exists() or saves.is_symlink() else {}
@@ -249,6 +353,11 @@ def stage_native_data(app, package, plan):
 
 
 def validate_data_restore(app, plan):
+    validate_startup_movies(app, plan.get("startup_movies", []))
+    if "intro_video" in plan:
+        intro_video_setting(Path(plan["user_data"]) / "UserSettings.ini")
+        if plan["intro_video"]["original_value"] not in {"0", "1"}:
+            raise ProbeError("Unrecognized original intro-video setting; preserving all files")
     target, cache, backup = data_paths(app, plan)
     if target.exists() or target.is_symlink():
         remaining = tree_hashes(target)
@@ -278,6 +387,9 @@ def validate_data_restore(app, plan):
 
 
 def restore_native_data(app, plan):
+    if "intro_video" in plan:
+        set_intro_video(plan, restore=True)
+    restore_startup_movies(app, plan.get("startup_movies", []))
     target, cache, backup = data_paths(app, plan)
     if target.exists():
         shutil.rmtree(target)  # Exact inventory was verified before restoring.
@@ -328,10 +440,16 @@ def install(app, wrapper, dry_run=False, expected_marker=MARKER, native_data=Non
             "original_mode": stat.S_IMODE(core.stat().st_mode)}
     if native_data is not None:
         data["native_data"] = native_data
+        if "intro_video" in native_data or "startup_movies" in native_data:
+            # Older installers must refuse this transaction rather than remove
+            # its manifest without restoring the newly owned startup files.
+            data["schema"] = 2
     if dry_run:
         print(f"Ready. Would preserve {core.name} as {backup.name} and install the {data['core_kind']} core. No files changed.")
         if native_data:
             print("Would install matching CP startup data, preserve the stock cache and retain working localization caches.")
+            if "intro_video" in native_data:
+                print(f"Would disable {len(native_data['startup_movies'])} startup movie files, including publisher logos, and skip the intro video. Originals and the previous intro setting return on uninstall.")
             if "save_files" in native_data:
                 print("Would preserve stock Saves and activate a fresh folder for the native gameplay probe.")
         return
@@ -357,6 +475,8 @@ def install(app, wrapper, dry_run=False, expected_marker=MARKER, native_data=Non
         print("Native Community Patch core installed for startup testing. Original core preserved and verified.")
         if native_data:
             print("Matching CP database package installed; stock cache preserved and language caches retained.")
+            if "intro_video" in native_data:
+                print("Startup movies and publisher logos are disabled. Originals and your previous intro setting will return on uninstall.")
             if "save_files" in native_data:
                 print("Gameplay probe: stock saves preserved; a fresh Saves folder is active for native-format saves.")
             else:

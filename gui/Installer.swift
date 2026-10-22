@@ -137,7 +137,7 @@ final class Installer: NSObject, NSApplicationDelegate, NSWindowDelegate {
         uninstallButton = button("Uninstall / Restore", #selector(uninstallBeta))
         let actions = stack([installButton, checkButton, uninstallButton], vertical: false, spacing: 10)
 
-        let notice = label("Before installing: quit Civ V and its launcher. Move separate EUI / VPUI copies and other VP modpacks outside DLC. To change interfaces, Uninstall / Restore first. Your normal saves return when you uninstall.", secondary: true)
+        let notice = label("Quit Civ V and its launcher. Move separate EUI / VPUI copies and other VP modpacks outside DLC. Startup videos and publisher logos are skipped; original files, saves and the intro setting return when you uninstall. Restore first to change interfaces.", secondary: true)
         let mods = label("Why not the MODS folder? Mac Civ V has its own game core, but cannot load Vox Populi’s Windows DLL. This installer replaces the core with a native Mac VP version and installs its matching startup data, with backups. VP stays active until you uninstall.", secondary: true)
         notice.preferredMaxLayoutWidth = 760
         mods.preferredMaxLayoutWidth = 760
@@ -245,7 +245,7 @@ final class Installer: NSObject, NSApplicationDelegate, NSWindowDelegate {
     func succeeded(_ command: String, dryRun: Bool, output: String) {
         if dryRun {
             stateTitle.stringValue = "Ready to install"
-            stateDetail.stringValue = "\(eui.state == .on ? "VP with EUI" : "Standard VP") is ready. The installer will preserve your original core, cache and saves."
+            stateDetail.stringValue = "\(eui.state == .on ? "VP with EUI" : "Standard VP") is ready. Startup videos and logos will be skipped, with originals preserved for uninstall."
         } else if command == "install" {
             installed = true
             stateTitle.stringValue = "Vox Populi is installed"
@@ -281,6 +281,7 @@ final class Installer: NSObject, NSApplicationDelegate, NSWindowDelegate {
         else if output.contains("Restore the previous") || output.contains("Restore it before installing") { title = "Restore the installed beta first"; detail = "Click Uninstall / Restore, then choose your interface and install. Beta saves are preserved separately. Start a new game after switching interfaces." }
         else if output.contains("reviewed SHA-256") { title = "This game build is not supported"; detail = "Beta 0.1 requires Steam's Mac Aspyr 1.4.2 (180925) build. Your game files were not replaced." }
         else if output.contains("localization cache") || output.contains("Localization-Merged.db") { title = "Run normal Brave New World once"; detail = "Restore any existing beta, launch unmodified BNW, reach the menu and quit. Then try installing again." }
+        else if output.contains("no unique GameSettings") || (output.contains("UserSettings.ini") && output.contains("Expected a regular file")) { title = "Run normal Brave New World once"; detail = "The installer needs the game's UserSettings.ini to manage startup video skipping. Restore, launch normal BNW once and quit, then retry." }
         else if output.contains("Permission denied") || output.contains("Operation not permitted") { title = "macOS blocked file access"; detail = "Use Choose Game to select the app again. Check the exact blocked path in Details before changing permissions." }
         stateTitle.stringValue = title
         stateDetail.stringValue = detail

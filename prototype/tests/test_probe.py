@@ -322,6 +322,129 @@ class NativeDataTests(Fixture):
         self.assertFalse(self.target.exists())
         self.assertEqual(self.core.read_bytes(), self.original)
 
+    def enable_startup_skip(self, original_value="0"):
+        self.enable_gameplay_probe()
+        self.settings = self.user_data / "UserSettings.ini"
+        self.settings_original = ("; user options\r\n[GameSettings]\r\nSkipIntroVideo = " + original_value
+                                  + " ; previous choice\r\nMusicVolume = 5\r\n\r\n[Other]\r\nText = café\r\n").encode()
+        self.settings.write_bytes(self.settings_original)
+        self.movies = {}
+        for directory, name in [("Contents/Assets", "Civ5_Opening_Movie_en_US.mov"),
+                                ("Contents/Assets", "Civ5_Opening_Movie_fr_FR.mov"),
+                                ("Contents/Assets/Assets/DLC/Expansion", "Civ5XP_Opening_Movie_en_US.mov"),
+                                ("Contents/Assets/Assets/DLC/Expansion2", "Civ5XP2_Opening_Movie_en_US.mov")]:
+            path = self.app / directory / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(("fixture startup movie " + name).encode())
+            self.movies[path] = path.read_bytes()
+        self.unrelated_movie = self.app / "Contents/Assets/WonderMovie.mov"
+        self.unrelated_movie.write_bytes(b"keep gameplay movie")
+        path = self.package / manage.DATA_MANIFEST
+        metadata = json.loads(path.read_text())
+        metadata["content"] = "vox-populi"
+        path.write_text(json.dumps(metadata))
+        self.plan = manage.prepare_native_data(self.app, self.package, self.user_data, ARGS.wrapper)
+
+    def assert_startup_restored(self, settings=None):
+        self.assertEqual(self.settings.read_bytes(), settings or self.settings_original)
+        for movie, content in self.movies.items():
+            self.assertEqual(movie.read_bytes(), content)
+            self.assertFalse(movie.with_name(movie.name + manage.MOVIE_BACKUP_SUFFIX).exists())
+        self.assertEqual(self.unrelated_movie.read_bytes(), b"keep gameplay movie")
+
+    def test_startup_dry_run_preserves_settings_and_every_movie(self):
+        self.enable_startup_skip()
+        self.assertEqual(len(self.plan["startup_movies"]), 4)
+        self.install(dry_run=True)
+        self.assert_startup_restored()
+        self.assertFalse(self.manifest.exists())
+
+    def test_startup_skip_and_restore_keep_other_options_and_original_movies(self):
+        self.enable_startup_skip()
+        self.install()
+        self.assertEqual(manage.load_manifest(self.manifest)["schema"], 2)
+        self.assertIn(b"SkipIntroVideo = 1 ; previous choice\r\n", self.settings.read_bytes())
+        for movie, content in self.movies.items():
+            self.assertFalse(movie.exists())
+            self.assertEqual(movie.with_name(movie.name + manage.MOVIE_BACKUP_SUFFIX).read_bytes(), content)
+        self.settings.write_bytes(self.settings.read_bytes().replace(b"MusicVolume = 5", b"MusicVolume = 7"))
+        manage.restore(self.app)
+        self.assert_startup_restored(self.settings_original.replace(b"MusicVolume = 5", b"MusicVolume = 7"))
+
+    def test_previously_skipped_intro_remains_skipped_after_restore(self):
+        self.enable_startup_skip("1")
+        self.install()
+        manage.restore(self.app)
+        self.assert_startup_restored()
+
+    def test_interrupted_movie_rename_can_restore_all_files(self):
+        self.enable_startup_skip()
+        rename = Path.rename
+        count = 0
+        def interrupted(path, target):
+            nonlocal count
+            if str(target).endswith(manage.MOVIE_BACKUP_SUFFIX):
+                count += 1
+                if count == 2:
+                    raise OSError("interrupted movie move")
+            return rename(path, target)
+        with mock.patch.object(Path, "rename", interrupted):
+            with self.assertRaisesRegex(OSError, "interrupted movie move"):
+                self.install()
+        manage.restore(self.app)
+        self.assert_startup_restored()
+        self.assertEqual(self.core.read_bytes(), self.original)
+
+    def test_core_copy_interruption_also_restores_startup_settings_and_movies(self):
+        self.enable_startup_skip()
+        with mock.patch.object(manage, "atomic_copy", side_effect=OSError("interrupted core copy")):
+            with self.assertRaisesRegex(OSError, "interrupted core copy"):
+                self.install()
+        manage.restore(self.app)
+        self.assert_startup_restored()
+
+    def test_changed_movie_backup_blocks_restore_before_core_changes(self):
+        self.enable_startup_skip()
+        self.install()
+        movie = next(iter(self.movies))
+        backup = movie.with_name(movie.name + manage.MOVIE_BACKUP_SUFFIX)
+        backup.write_bytes(b"changed backup")
+        with self.assertRaisesRegex(manage.ProbeError, "Startup movie or backup changed"):
+            manage.restore(self.app)
+        self.assertEqual(self.core.read_bytes(), ARGS.wrapper.read_bytes())
+        self.assertEqual(backup.read_bytes(), b"changed backup")
+
+    def test_untracked_movie_backup_and_unsafe_paths_are_preserved(self):
+        self.enable_startup_skip()
+        movie = next(iter(self.movies))
+        backup = movie.with_name(movie.name + manage.MOVIE_BACKUP_SUFFIX)
+        backup.write_bytes(b"existing movie backup")
+        with self.assertRaisesRegex(manage.ProbeError, "untracked startup movie backup"):
+            manage.prepare_native_data(self.app, self.package, self.user_data, ARGS.wrapper)
+        self.assertEqual(backup.read_bytes(), b"existing movie backup")
+        for path in ["../outside.mov", "/tmp/Civ5_Opening_Movie_en_US.mov", "Contents/Assets/WonderMovie.mov"]:
+            with self.assertRaisesRegex(manage.ProbeError, "Unrecognized startup movie path"):
+                manage.movie_paths(self.app, path)
+
+    def test_malformed_or_ambiguous_intro_settings_are_rejected(self):
+        self.enable_startup_skip()
+        for content in [b"[GameSettings]\nSkipIntroVideo=2\n", b"[GameSettings]\nSkipIntroVideo=0\nSkipIntroVideo=2\n",
+                        b"[Other]\nSkipIntroVideo=0\n", b"[GameSettings]\nSkipIntroVideo=0\n[GameSettings]\nSkipIntroVideo=1\n"]:
+            self.settings.write_bytes(content)
+            with self.assertRaisesRegex(manage.ProbeError, "no unique GameSettings"):
+                manage.prepare_native_data(self.app, self.package, self.user_data, ARGS.wrapper)
+            self.assertEqual(self.settings.read_bytes(), content)
+            self.assertFalse(self.manifest.exists())
+
+    def test_concurrent_settings_change_aborts_and_preserves_other_option_change(self):
+        self.enable_startup_skip()
+        edited = self.settings_original.replace(b"MusicVolume = 5", b"MusicVolume = 8")
+        self.settings.write_bytes(edited)
+        with self.assertRaisesRegex(manage.ProbeError, "UserSettings.ini changed during preparation"):
+            self.install()
+        manage.restore(self.app)
+        self.assert_startup_restored(edited)
+
     def enable_gameplay_probe(self, existing=True):
         if existing:
             saves = self.user_data / "Saves/single"
